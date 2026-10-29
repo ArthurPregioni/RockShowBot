@@ -3,6 +3,7 @@ declare namespace Cloudflare {
     DB?: D1Database;
     BUCKET?: R2Bucket;
     APPLE_MUSIC_DEVELOPER_TOKEN?: string;
+    SPOTIFY_CLIENT_ID?: string;
     TICKETMASTER_API_KEY?: string;
     PREDICTHQ_API_KEY?: string;
   }

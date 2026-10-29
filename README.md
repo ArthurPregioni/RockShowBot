@@ -5,10 +5,16 @@
 ## Usar a versão hospedada
 
 1. Abra o link acima e entre com sua conta.
-2. **A vinculação da conta Apple Music ainda não está disponível nesta instância.** Falta uma credencial MusicKit do aplicativo, e o login com uma conta real não foi validado. O responsável pelo projeto precisa resolver essa pendência para oferecer a conexão aos usuários. O botão permanece desabilitado enquanto essa configuração estiver ausente.
-3. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para América Latina.
-4. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. A rotina em nuvem usa o Gmail conectado para enviar um resumo apenas quando houver novidades; mensagens ficam pendentes se o envio falhar.
-5. **Buscar agora** consulta notícias recentes e APIs opcionais. A rotina das 9h e 21h (America/Sao_Paulo) também verifica fontes oficiais na web. Notícias sem confirmação ficam sinalizadas como não verificadas; uma data de publicação não vira data de show.
+2. Clique em **Escolher serviço**, no cartão **Conectar serviço de música**. O seletor mostra as opções e a disponibilidade de cada uma:
+   - **Deezer:** abra seu perfil no Deezer, copie o link (ex.: `https://www.deezer.com/br/profile/123`) e use **Importar artistas do perfil**. O perfil e os artistas favoritos precisam estar públicos. A consulta não faz login e não acessa dados privados.
+   - **Buscar artistas no catálogo:** pesquise por nome na Apple ou no Deezer. É uma pesquisa pública, sem acesso à sua conta; serve para montar o radar mesmo usando outro streaming.
+   - **Apple Music:** importa artistas da biblioteca autorizada, mas o login está indisponível nesta instalação por falta da credencial MusicKit do aplicativo.
+   - **Spotify:** importa artistas seguidos após OAuth; está indisponível nesta instalação por falta do Client ID do aplicativo.
+   - **YouTube Music:** ainda sem implementação da importação da biblioteca de artistas.
+3. Marque os artistas e clique em **Importar**. Nenhum artista é adicionado antes da sua confirmação; nomes repetidos são ignorados. Repita com outros serviços ou pesquisas para completar o radar.
+4. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para América Latina.
+5. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. A rotina em nuvem usa o Gmail conectado para enviar um resumo apenas quando houver novidades; mensagens ficam pendentes se o envio falhar.
+6. **Buscar agora** consulta notícias recentes e APIs opcionais. A rotina das 9h e 21h (America/Sao_Paulo) também verifica fontes oficiais na web. Notícias sem confirmação ficam sinalizadas como não verificadas; uma data de publicação não vira data de show.
 
 ### Apple Music na instância hospedada
 
@@ -17,6 +23,24 @@ O fluxo de importação recebe os **artistas da biblioteca autorizada**, mostra 
 Para acessar a **biblioteca privada**, a Apple exige uma credencial MusicKit do Apple Developer Program, obtida por quem mantém o aplicativo. Depois de configurá-la, ainda é necessário validar o login e a autorização com uma conta real. O fluxo implementado consulta a biblioteca uma vez e descarta o token do usuário; uma vinculação persistente com sincronização ainda não foi implementada.
 
 Use o utilitário documentado abaixo com `--origin https://rockshowbot-arthur.socialyak11.chatgpt.site`. O token assinado é configurado como segredo `APPLE_MUSIC_DEVELOPER_TOKEN` nas variáveis de produção do Site. A chave privada `.p8` fica na sua máquina. Peça ao assistente para configurar o token quando o arquivo estiver pronto; não é necessário manter nenhum processo local ligado.
+
+### Spotify na instância hospedada
+
+Quem mantém a instalação cadastra um aplicativo no [Spotify for Developers](https://developer.spotify.com/dashboard) e configura `SPOTIFY_CLIENT_ID` nas variáveis de produção do Site. Cadastre exatamente este retorno HTTPS:
+
+```text
+https://rockshowbot-arthur.socialyak11.chatgpt.site/api/music/spotify/callback
+```
+
+Depois publique a configuração. O login usa PKCE (sem Client Secret), pede apenas `user-follow-read` e mostra os artistas seguidos para seleção. O modo de desenvolvimento do Spotify exige Premium para o dono do aplicativo e usuários de teste autorizados; confira os [limites atuais](https://developer.spotify.com/documentation/web-api/concepts/quota-modes). O fluxo está implementado e coberto por testes automatizados; login real não foi validado por falta da credencial.
+
+### O que a importação faz
+
+Importações trazem **artistas**, nunca playlists. Apple e Spotify consultam a conta uma vez após autorização; o Deezer consulta favoritos públicos. Tokens de acesso/refresh não são guardados para sincronização. As sessões de importação duram dez minutos, são vinculadas ao usuário e ao navegador e guardam temporariamente os artistas candidatos. No Spotify, o verificador PKCE fica na sessão apenas até o retorno do login. Não existe sincronização contínua da biblioteca: para atualizar o radar, repita a importação.
+
+A pesquisa no catálogo usa a [API pública da Apple](https://performance-partners.apple.com/search-api) ou o endpoint público de artistas do Deezer. A consulta de favoritos foi verificada diretamente em `https://api.deezer.com/user/2529/artists`; a disponibilidade depende do serviço e da visibilidade do perfil. Não é necessário criar aplicativo Deezer para essa consulta pública. Perfis privados não têm suporte neste fluxo.
+
+Para desenvolvimento do painel: Node >=22.13, `npm ci`, `npm run dev` e login local do Sites. O código Python é uma alternativa separada; configurar `.env` para Python não configura os segredos do Site hospedado. Verificação automatizada do painel: `npx tsc --noEmit` e `node --experimental-strip-types --test tests/cloud-bot.test.mjs tests/music-providers.test.mjs`.
 
 ### Arquitetura da versão hospedada
 

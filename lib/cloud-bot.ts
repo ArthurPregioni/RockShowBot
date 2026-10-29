@@ -1,3 +1,4 @@
+import { musicProviders } from "./music-providers";
 import { env } from "cloudflare:workers";
 import { appleConfiguration, discover, digest, normalize, webURL, type ShowEvent } from "./bot-core";
 
@@ -26,7 +27,7 @@ export async function dashboard() {
     database().prepare("SELECT * FROM scan_runs ORDER BY created_at DESC LIMIT 1").first(),
   ]);
   return { artists, settings: { ...preferences, countries: JSON.parse(preferences.countries) }, events: shows.results, lastRun,
-    apple: appleStatus(), sources: { news: true, ticketmaster: !!env.TICKETMASTER_API_KEY, predicthq: !!env.PREDICTHQ_API_KEY } };
+    apple: appleStatus(), music: musicProviders(appleStatus().ready,env.SPOTIFY_CLIENT_ID), sources: { news: true, ticketmaster: !!env.TICKETMASTER_API_KEY, predicthq: !!env.PREDICTHQ_API_KEY } };
 }
 export async function addArtist(name: string) {
   if (typeof name !== "string" || !normalize(name) || name.trim().length > 160) throw new UserError("Informe um nome de artista com até 160 caracteres.");

@@ -45,7 +45,7 @@ export async function appleLibrary(userToken: string, developerToken: string, or
     const url = new URL(path, "https://api.music.apple.com");
     if (url.origin !== "https://api.music.apple.com" || url.pathname !== "/v1/me/library/artists" || url.hash || seen.has(url.href)) throw new Error("Apple Music retornou paginação inválida.");
     seen.add(url.href);
-    const response = await transport(url, { headers: { Authorization: "Bearer " + developerToken, "Music-User-Token": userToken, Origin: origin }, signal: AbortSignal.timeout(20000), redirect: "error" });
+    const response = await transport(url, { headers: { Authorization: "Bearer " + developerToken, "Music-User-Token": userToken, Origin: origin }, signal: AbortSignal.timeout(20000), redirect: "manual" });
     if (!response.ok) {
       const messages: Record<number, string> = {401: "Apple recusou a credencial MusicKit. Confira a validade e a origem.", 403: "Apple recusou o acesso à biblioteca. Confira sua assinatura e autorize novamente.", 429: "A Apple limitou as consultas. Aguarde e tente novamente."};
       throw new Error(messages[response.status] || "Apple Music está indisponível. Tente novamente.");

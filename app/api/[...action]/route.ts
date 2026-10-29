@@ -1,3 +1,4 @@
+import { musicAction } from "../../../lib/music-imports";
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { appleConfiguration, appleLibrary, digest, type Candidate, type ShowEvent } from "../../../lib/bot-core";
@@ -33,6 +34,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
       if (!origin || origin !== originFor(request)) throw new UserError("Origem da requisição inválida.", 403);
     }
     if (request.method === "GET") {
+      if (action.startsWith("music/")) return await musicAction(request,action,{},user!.userId,originFor(request));
       if (action === "dashboard") return json(await dashboard());
       if (action === "automation/context") {
         const preferences = await settings();
@@ -47,6 +49,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
     let body:any;
     try { body = rawBody ? JSON.parse(rawBody) : {}; } catch { throw new UserError("Formato de requisição inválido."); }
     if (!body || typeof body!=="object" || Array.isArray(body)) throw new UserError("Formato de requisição inválido.");
+    if (action.startsWith("music/")) return await musicAction(request,action,body,user!.userId,originFor(request));
     if (action === "artists") return json({ added: await addArtist(body.name) });
     if (action === "artists/remove") {
       await database().prepare("DELETE FROM watch_artists WHERE id=?").bind(String(body.id)).run();
