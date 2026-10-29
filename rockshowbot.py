@@ -76,6 +76,18 @@ def init_db():
             con.execute("ALTER TABLE events ADD COLUMN email_sent INTEGER NOT NULL DEFAULT 1")
 
 
+def prune_expired_events():
+    """Remove provider listings 30 days after their event date by default."""
+    try:
+        retention_days = max(1, min(3650, int(os.getenv("EVENT_RETENTION_DAYS", "30"))))
+    except ValueError:
+        retention_days = 30
+    with db() as con:
+        con.execute("""DELETE FROM events
+            WHERE status='listed' AND starts_at<>''
+              AND date(substr(starts_at,1,10)) < date('now', ?)""", (f"-{retention_days} days",))
+
+
 def setting(key, default=""):
     with db() as con:
         row = con.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
@@ -208,10 +220,7 @@ class PredictHQSource:
                 normalized_title = normalized(title)
                 if normalized(artist) not in entity_names and normalized(artist) not in normalized_title:
                     continue
-                location = event.get("location", []) or []
                 city = event.get("place", {}).get("name", "")
-                if not city and len(location) >= 2:
-                    city = f"{location[1]}, {location[0]}"
                 found.append({"id": "phq:" + str(event["id"]), "artist": artist,
                     "title": title or artist, "venue": "", "city": city, "region": country,
                     "starts_at": event.get("start", ""),
@@ -232,6 +241,7 @@ def configured_sources():
 def scan(sources=None):
     """Scan all configured providers. Failures in one provider do not stop others."""
     with SCAN_LOCK:
+        prune_expired_events()
         with db() as con:
             artists = [row[0] for row in con.execute("SELECT name FROM artists ORDER BY name")]
             countries = [row[0] for row in con.execute("SELECT code FROM regions ORDER BY code")]
@@ -375,12 +385,21 @@ class Handler(BaseHTTPRequestHandler):
           "article,.panel{padding:.85rem;margin:.5rem 0;border:1px solid #ddd;border-radius:6px}"
           ".muted{color:#666;font-size:.9rem}.badge{font-size:.8rem;border-radius:10px;padding:.2rem .5rem;background:#eee}"
           ".unverified{background:#fff0cc}.good{color:#176b35}.bad{color:#995b00}.inline{display:inline-flex}"
-          "</style><body>" f"<h1>🎸 RockShowBot</h1><p>Alertas de shows para suas bandas favoritas.</p>{content}</body></html>")
+          "</style><body>" f"<h1>🎸 RockShowBot</h1><p>Alertas de shows para suas bandas favoritas.</p>{content}"
+          "<footer class='muted'><a href='/privacy'>Privacidade e retenção de dados</a></footer></body></html>")
         self.respond(status, body)
 
     def do_GET(self):
         if self.path == "/healthz":
             self.respond(200, b'{"status":"ok"}', "application/json")
+            return
+        if self.path == "/privacy":
+            contact = os.getenv("ADMIN_CONTACT", "").strip()
+            contact_text = f"Contato do administrador: {esc(contact)}." if contact else "O administrador pode informar um contato em ADMIN_CONTACT."
+            self.page("<h2>Privacidade</h2><p>Esta instalação é administrada por uma única pessoa. O RockShowBot guarda no banco local o e-mail de alertas, a lista de artistas, as regiões e os eventos/dicas encontrados. Não usa analytics nem cookies de rastreamento.</p>"
+                "<p>Quando habilitadas, as buscas enviam nomes de artistas, códigos de país e chaves de API aos provedores configurados. Os alertas usam o servidor SMTP configurado. Cada provedor pode receber dados técnicos da conexão conforme os próprios termos e políticas.</p>"
+                "<p>O servidor registra horário, IP e caminho das requisições no log do processo/hospedagem. Eventos listados por provedores são removidos 30 dias após a data do show, por padrão. O administrador pode apagar qualquer item pela interface ou apagar o banco SQLite para remover preferências e histórico local. Dicas da comunidade ficam salvas até que o administrador as apague.</p>"
+                f"<p>{contact_text}</p><a href='/'>Voltar</a>")
             return
         if not self.require_auth():
             return
@@ -409,8 +428,10 @@ class Handler(BaseHTTPRequestHandler):
             date_text = f"{esc(event['starts_at'])} · " if event["starts_at"] else "Data a confirmar · "
             loc = " · ".join(part for part in (event["venue"], event["city"], event["region"]) if part)
             href = f"<a href='{esc(event['url'])}' target='_blank' rel='noopener noreferrer'>Abrir fonte/link</a>" if event["url"] else ""
+            delete_form = (f"<form class='inline' method='post' action='/event/remove'><input type='hidden' name='id' value='{esc(event['id'])}'><button>Excluir</button></form>")
             event_cards.append(f"<article class='{status}'><b>{esc(event['artist'])}</b> — {esc(event['title'])} "
-                f"<span class='badge'>{label}</span><br>{date_text}{esc(loc)}<br>{href} <span class='muted'>via {esc(event['source'])}</span></article>")
+                f"<span class='badge'>{label}</span><br>{date_text}{esc(loc)}<br>{href} <span class='muted'>via {esc(event['source'])}</span>"
+                f"{delete_form}</article>")
         event_list = "".join(event_cards) or "<p class='muted'>Ainda não há eventos. Use o botão de busca, ou cadastre uma dica.</p>"
         sources = "".join(f"<li>{esc(name)}: <span class='{('good' if active else 'bad')}'>{esc(state)}</span></li>" for name, active, state in source_status())
         select = "".join(f"<option value='{esc(a['name'])}'>{esc(a['name'])}</option>" for a in artists)
@@ -464,6 +485,9 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/region/remove" and value("code").upper() != "BR":
                 with db() as con:
                     con.execute("DELETE FROM regions WHERE code=?", (value("code").upper(),))
+            elif self.path == "/event/remove":
+                with db() as con:
+                    con.execute("DELETE FROM events WHERE id=?", (value("id"),))
             elif self.path == "/email":
                 set_setting("email", value("email"))
             elif self.path == "/email/test":
@@ -503,9 +527,10 @@ def scheduled_scans(interval_hours):
 
 
 def run_server():
-    if not APP_PASSWORD:
-        raise SystemExit("Configure APP_PASSWORD antes de iniciar (veja .env.example)")
+    if not APP_PASSWORD or APP_PASSWORD == "change-this-to-a-long-random-password" or len(APP_PASSWORD) < 16:
+        raise SystemExit("Defina APP_PASSWORD com pelo menos 16 caracteres antes de iniciar (veja .env.example)")
     init_db()
+    prune_expired_events()
     port = int(os.getenv("PORT", "8000"))
     try:
         interval_hours = float(os.getenv("SCAN_INTERVAL_HOURS", "12"))

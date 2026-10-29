@@ -6,6 +6,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from datetime import date, timedelta
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
@@ -100,6 +101,19 @@ class RockShowBotTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             bot.add_tip("Sepultura", "Possível show", "", "", "BR", "javascript:alert(1)")
 
+    @patch.object(bot, "send_email", return_value=True)
+    def test_retention_removes_old_provider_events_but_keeps_user_tips(self, _send_email):
+        old_date = (date.today() - timedelta(days=60)).isoformat()
+        with bot.db() as con:
+            con.execute("""INSERT INTO events(id,artist,title,starts_at,source,status,email_sent)
+                VALUES('tm:old','Sepultura','Old show',?,'Ticketmaster','listed',1)""", (old_date,))
+        bot.add_tip("Sepultura", "Old rumor", old_date, "São Paulo", "BR", "https://example.com/old")
+        bot.prune_expired_events()
+        with bot.db() as con:
+            ids = {row[0] for row in con.execute("SELECT id FROM events")}
+        self.assertNotIn("tm:old", ids)
+        self.assertTrue(any(item.startswith("tip:") for item in ids))
+
     def test_health_is_public_but_dashboard_requires_password(self):
         old_password, old_user = bot.APP_PASSWORD, bot.APP_USER
         bot.APP_PASSWORD, bot.APP_USER = "test-secret", "admin"
@@ -110,6 +124,8 @@ class RockShowBotTests(unittest.TestCase):
         try:
             with urllib.request.urlopen(base + "/healthz") as response:
                 self.assertEqual(response.status, 200)
+            with urllib.request.urlopen(base + "/privacy") as response:
+                self.assertIn("Privacidade", response.read().decode())
             with self.assertRaises(urllib.error.HTTPError) as error:
                 urllib.request.urlopen(base + "/")
             self.assertEqual(error.exception.code, 401)

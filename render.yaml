@@ -14,12 +14,16 @@ services:
         value: admin
       - key: APP_PASSWORD
         sync: false
+      - key: ADMIN_CONTACT
+        sync: false
       - key: DATABASE_PATH
         value: /var/data/rockshowbot.db
       - key: PORT
         value: "10000"
       - key: SCAN_INTERVAL_HOURS
         value: "12"
+      - key: EVENT_RETENTION_DAYS
+        value: "30"
       - key: TICKETMASTER_API_KEY
         sync: false
       - key: PREDICTHQ_API_KEY

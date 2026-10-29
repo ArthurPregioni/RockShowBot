@@ -58,7 +58,7 @@ As buscas automáticas ocorrem a cada 12 horas por padrão, enquanto o processo 
 2. Coloque o token em `PREDICTHQ_API_KEY`.
 3. Reinicie o app. A cobertura depende do plano/país habilitado na conta, e a busca pode não retornar dados para todos os locais.
 
-O Ticketmaster cobre eventos listados nas plataformas que alimentam a Discovery API; isso não significa cobertura de todos os shows ou casas. A busca confere o nome da banda entre as atrações para reduzir homônimos. O PredictHQ é opcional e seu acesso pode ser pago ou limitado por assinatura. Os resultados dessas fontes significam “listado pelo provedor”, não confirmação diretamente com o artista.
+O Ticketmaster cobre eventos listados nas plataformas que alimentam a Discovery API; isso não significa cobertura de todos os shows ou casas. A busca confere o nome da banda entre as atrações para reduzir homônimos. O PredictHQ é opcional e seu acesso pode ser pago ou limitado por assinatura. Os resultados dessas fontes significam “listado pelo provedor”, não confirmação diretamente com o artista. Eventos listados são removidos 30 dias depois da data do show (`EVENT_RETENTION_DAYS`); dicas pessoais permanecem até o administrador apagá-las. A [política da API Ticketmaster](https://developer.ticketmaster.com/support/terms-of-use/) estabelece limites para retenção e solicitações de remoção de dados.
 
 O Songkick informa que não está aprovando projetos de hobby/educação e que seu uso de API requer licença paga; por isso não é tratado como dependência pronta do projeto ([acesso à API](https://www.songkick.com/developer/)). A API do Bandsintown é destinada a artistas e equipes autorizadas, e a chave é vinculada ao artista ([regras de acesso](https://help.artists.bandsintown.com/en/articles/7053475-what-is-the-bandsintown-api)). Não compartilhe chaves pessoais entre instalações.
 
@@ -71,7 +71,7 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USERNAME=seu-usuario
 SMTP_PASSWORD=sua-senha-ou-senha-de-aplicativo
-SMTP_FROM=RockShowBot <voce@example.com>
+SMTP_FROM="RockShowBot <voce@example.com>"
 SMTP_STARTTLS=true
 ```
 
@@ -94,8 +94,8 @@ Artistas repetidos são ignorados. O exemplo `examples/artistas-exemplo.csv` pod
 
 O repositório inclui `Dockerfile` e `render.yaml` para criar um serviço web em Frankfurt, com disco persistente para o SQLite. O blueprint pede que você defina a senha administrativa ao criá-lo.
 
-1. Envie este repositório para um Git remoto que sua conta Render consiga acessar.
-2. No Render, crie um **Blueprint** apontando para o repositório e revise os recursos que ele vai criar antes de aplicar.
+1. Envie este repositório para um Git remoto que sua conta Render consiga acessar (a cópia de desenvolvimento está em [GitHub](https://github.com/ArthurPregioni/RockShowBot)).
+2. Abra o [Render Dashboard](https://dashboard.render.com/blueprint/new), conecte o repositório e crie um **Blueprint**. Revise os recursos e custos que ele vai criar antes de aplicar.
 3. O blueprint inclui um serviço web e um disco persistente de 1 GB. **O disco persistente exige um plano pago.** Não aplique o blueprint sem revisar o preço exibido no painel.
 4. No painel do serviço, configure `TICKETMASTER_API_KEY` e, se tiver, `PREDICTHQ_API_KEY`, além das variáveis `SMTP_*`.
 5. Informe uma senha forte para `APP_PASSWORD` quando o Render pedir, faça o deploy e abra a URL `onrender.com`. O usuário é `admin`.
@@ -131,8 +131,10 @@ Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem envi
 
 - Este MVP é uma instalação pessoal com um login administrativo compartilhado; não tem cadastro de múltiplos usuários.
 - `APP_PASSWORD` protege a interface. Use uma senha única e HTTPS quando publicada.
+- `ADMIN_CONTACT` pode exibir um contato na página pública de privacidade.
 - Chaves de API e SMTP ficam em variáveis de ambiente. O e-mail de destino, artistas, regiões e eventos ficam no SQLite local.
-- Em hospedagem, configure `DATABASE_PATH` dentro do disco persistente e faça backups regulares desse arquivo.
+- O servidor/hospedagem registra horário, IP e caminho das requisições em seus logs.
+- Em hospedagem, configure `DATABASE_PATH` dentro do disco persistente e faça backups regulares desse arquivo. A página **Privacidade** explica os dados guardados e a retenção.
 - O botão de busca e as buscas agendadas consultam todos os provedores configurados para cada artista e país; monitore as cotas dos provedores.
 - A interface aceita dicas pessoais. Elas não passam por moderação externa e recebem o selo de não verificadas.
 - A importação direta via Spotify/Apple Music/Deezer ainda não faz parte desta versão; CSV deixa o usuário manter controle da lista sem conceder acesso à conta de streaming.
