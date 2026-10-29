@@ -1,11 +1,11 @@
 import { normalize, type Candidate } from "./bot-core.ts";
 
 type Transport = typeof fetch;
-export type MusicProvider = {id:string;name:string;mode:"oauth"|"public"|"unavailable";ready:boolean;description:string};
+export type MusicProvider = {id:string;name:string;mode:"oauth"|"public"|"browser"|"unavailable";ready:boolean;oauthReady?:boolean;description:string};
 export function musicProviders(appleReady:boolean, spotifyClientID?:string):MusicProvider[] {
   return [
-    {id:"apple",name:"Apple Music",mode:"oauth",ready:appleReady,description:appleReady?"Importar artistas da biblioteca após autorizar sua conta.":"Login indisponível: falta a credencial MusicKit do aplicativo. A assinatura Apple Music, sozinha, não habilita esse acesso."},
-    {id:"spotify",name:"Spotify",mode:"oauth",ready:!!spotifyClientID,description:spotifyClientID?"Autorize a leitura dos artistas que você segue e escolha quem acompanhar.":"Login indisponível: falta cadastrar o aplicativo Spotify nesta instalação."},
+    {id:"apple",name:"Apple Music",mode:"browser",ready:true,oauthReady:appleReady,description:"Importe artistas da biblioteca aberta no navegador usando a extensão RockShowBot. Não requer uma conta Apple Developer. Você confirma a seleção antes de salvar."},
+    {id:"spotify",name:"Spotify",mode:"browser",ready:true,oauthReady:!!spotifyClientID,description:"Importe os artistas da seção Sua Biblioteca pelo navegador usando a extensão RockShowBot. Não exige cadastrar um aplicativo Spotify."},
     {id:"deezer",name:"Deezer",mode:"public",ready:true,description:"Importe os artistas favoritos de um perfil público pelo link ou ID. Não acessa biblioteca privada nem faz login."},
     {id:"youtube",name:"YouTube Music",mode:"unavailable",ready:false,description:"Importação da biblioteca de artistas ainda não implementada. A API oficial de inscrições do YouTube retorna canais e não representa essa biblioteca."},
   ];
@@ -83,4 +83,11 @@ export async function spotifyExchange(clientID:string,redirectURI:string,code:st
   const payload=await response.json() as any;
   if(typeof payload.access_token!=="string"||!payload.access_token)throw new Error("O Spotify não retornou uma autorização válida.");
   return payload.access_token as string;
+}
+
+export function browserArtists(provider:unknown,items:unknown):Candidate[] {
+  if(provider!=="apple"&&provider!=="spotify")throw new Error("Origem da biblioteca inválida. Use a extensão no Apple Music ou Spotify.");
+  if(!Array.isArray(items)||!items.length||items.length>4000)throw new Error("Envie de 1 a 4000 artistas da biblioteca.");
+  for(const artist of items)if(!artist||typeof artist.name!=="string"||!normalize(artist.name)||artist.name.length>160)throw new Error("A extensão retornou um nome de artista inválido. Faça a leitura novamente.");
+  return candidates(items.map(artist=>({id:normalize(artist.name),name:artist.name})));
 }

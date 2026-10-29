@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { digest, type Candidate } from "./bot-core";
 import { database, addArtist, UserError } from "./cloud-bot";
-import { catalogArtists, deezerArtists, spotifyArtists, spotifyAuthorization, spotifyExchange } from "./music-providers";
+import { browserArtists, catalogArtists, deezerArtists, spotifyArtists, spotifyAuthorization, spotifyExchange } from "./music-providers";
 
 const cookieName="rockshowbot_music";
 type Session={id:string;owner:string;phase:string;expires:number;candidates:string};
@@ -51,6 +51,11 @@ export async function musicAction(request:Request,action:string,body:any,owner:s
       const state=crypto.randomUUID()+crypto.randomUUID(),verifier=(crypto.randomUUID()+crypto.randomUUID()).replace(/-/g,"");
       const raw=await create(request,owner,"music:spotify:pending",{state,verifier});
       return result({url:await spotifyAuthorization(env.SPOTIFY_CLIENT_ID,redirectURI,state,verifier)},header(raw,origin));
+    }
+    if(action==="music/browser/prepare"){
+      const candidates=browserArtists(body.provider,body.artists);
+      const raw=await create(request,owner,`music:browser-${body.provider}:ready`,candidates);
+      return result({provider:body.provider,candidates},header(raw,origin));
     }
     if(action==="music/deezer/artists"||action==="music/catalog"){
       const provider=action==="music/catalog"?"catalog":"deezer";

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {deezerArtists,deezerUserID,catalogArtists,spotifyArtists,spotifyAuthorization,spotifyExchange,musicProviders} from '../lib/music-providers.ts';
+import {deezerArtists,deezerUserID,catalogArtists,spotifyArtists,spotifyAuthorization,spotifyExchange,musicProviders,browserArtists} from '../lib/music-providers.ts';
 
 test('Deezer accepts profile IDs, rejects playlists and arbitrary URLs',()=>{
   assert.equal(deezerUserID('https://www.deezer.com/br/profile/2529'),'2529');
@@ -43,9 +43,18 @@ test('Spotify OAuth uses PKCE and artist-only permission; credentials stay on tr
 });
 test('Provider availability is independent and does not pretend YouTube Music is implemented',()=>{
   const providers=musicProviders(false);
-  assert.equal(providers.find(p=>p.id==='apple').ready,false);
-  assert.equal(providers.find(p=>p.id==='spotify').ready,false);
+  assert.equal(providers.find(p=>p.id==='apple').ready,true);assert.equal(providers.find(p=>p.id==='apple').oauthReady,false);
+  assert.equal(providers.find(p=>p.id==='spotify').ready,true);assert.equal(providers.find(p=>p.id==='spotify').oauthReady,false);
   assert.equal(providers.find(p=>p.id==='deezer').ready,true);
   assert.equal(providers.find(p=>p.id==='youtube').ready,false);
-  assert.equal(musicProviders(false,'client').find(p=>p.id==='spotify').ready,true);
+  assert.equal(musicProviders(false,'client').find(p=>p.id==='spotify').oauthReady,true);
+});
+
+test('Browser library imports validate the source, names and size before selection',()=>{
+ assert.deepEqual(browserArtists('apple',[{name:'Sepultura'},{name:'SEPULTURA'},{name:'Angra'}]).map(a=>a.id),['angra','sepultura']);
+ assert.throws(()=>browserArtists('youtube',[{name:'Angra'}]),/Origem/);
+ assert.throws(()=>browserArtists('spotify',[]),/1 a 4000/);
+ assert.throws(()=>browserArtists('spotify',Array(4001).fill({name:'Angra'})),/1 a 4000/);
+ assert.throws(()=>browserArtists('apple',[{name:123}]),/inválido/);
+ assert.throws(()=>browserArtists('apple',[{name:'x'.repeat(161)}]),/inválido/);
 });

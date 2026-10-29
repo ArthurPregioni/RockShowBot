@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "RockShowBot — artistas da biblioteca",
+  "version": "0.1.0",
+  "description": "Importe artistas exibidos na sua biblioteca Apple Music ou Spotify para sua instalação RockShowBot, com confirmação.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*", "http://127.0.0.1/*", "http://localhost/*"],
+  "action": {"default_popup": "popup.html", "default_title": "Importar artistas para o RockShowBot"},
+  "background": {"service_worker": "background.js"}
+}

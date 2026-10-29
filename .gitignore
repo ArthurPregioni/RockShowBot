@@ -52,3 +52,7 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+
+# Generated browser extensions
+/.extension-build/
+/public/downloads/rockshowbot-*.zip
