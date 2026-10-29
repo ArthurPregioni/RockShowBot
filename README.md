@@ -21,7 +21,7 @@ set +a
 python3 rockshowbot.py
 ```
 
-Abra http://localhost:8000, cadastre os artistas, informe seu e-mail e clique em **Buscar shows agora**. Brasil já vem configurado. Para adicionar regiões, use códigos ISO de duas letras, por exemplo AR (Argentina), CL (Chile) ou MX (México).
+Abra http://localhost:8000, cadastre os artistas e informe seu e-mail. Brasil já vem configurado. Para adicionar regiões, use códigos ISO de duas letras, por exemplo AR (Argentina), CL (Chile) ou MX (México). As buscas rodam automaticamente enquanto o app estiver ligado, no intervalo `SCAN_INTERVAL_HOURS` (12 horas por padrão); também é possível buscar manualmente pela interface.
 
 O banco SQLite local fica em `rockshowbot.db`. Guarde esse arquivo para preservar as preferências; ele está no `.gitignore`.
 
@@ -39,7 +39,7 @@ Implemente um adaptador com `name` e método `find(artist, countries)`, retornan
 
 ## Limitações do MVP
 
-- Uma fonte de eventos e busca manual; ainda não há agendamento automático.
+- Uma fonte de eventos; o agendamento roda apenas enquanto o processo estiver ligado. Para execução contínua, hospede o app em uma máquina ou contêiner que permaneça ativo.
 - A busca por palavra-chave pode trazer homônimos; confira o link do evento.
 - Não há OAuth/importação Spotify/Apple/Deezer. A lista manual evita depender de permissões e políticas de terceiros; integrações podem ser adicionadas como módulos opt-in.
 - O servidor web deve ficar em rede confiável; antes de expor à internet, configure HTTPS e autenticação.

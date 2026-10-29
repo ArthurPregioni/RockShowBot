@@ -7,16 +7,16 @@ import json
 import os
 import smtplib
 import sqlite3
-import time
+import threading
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
 from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 
 DB_PATH = os.getenv("DATABASE_PATH", "rockshowbot.db")
 TM_KEY = os.getenv("TICKETMASTER_API_KEY", "")
+SCAN_LOCK = threading.Lock()
+STOP_SCHEDULER = threading.Event()
 
 
 def db():
@@ -108,7 +108,7 @@ class TicketmasterSource:
         return found
 
 
-def scan():
+def _scan():
     with db() as con:
         artists = [r[0] for r in con.execute("SELECT name FROM artists ORDER BY name")]
         countries = [r[0] for r in con.execute("SELECT code FROM regions")]
@@ -129,6 +129,22 @@ def scan():
         except Exception as exc:
             print("Email failed:", exc)
     return len(new)
+
+
+def scan():
+    """Run one scan at a time, whether triggered by the UI or scheduler."""
+    with SCAN_LOCK:
+        return _scan()
+
+
+def scheduled_scans(interval_hours):
+    """Wait one interval between scans and keep the web server alive on errors."""
+    while not STOP_SCHEDULER.wait(interval_hours * 60 * 60):
+        try:
+            count = scan()
+            print(f"Scheduled scan finished: {count} new event(s)")
+        except Exception as exc:
+            print(f"Scheduled scan failed: {exc}")
 
 
 def esc(value):
@@ -154,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
         content = (f"<h2>Preferências</h2><form method='post' action='/email'><input type='email' name='email' placeholder='Seu e-mail para alertas' value='{esc(setting('email'))}'><button>Salvar e-mail</button></form>"
           "<h2>Bandas / artistas</h2><form method='post' action='/artist'><input type='text' name='name' placeholder='Nome do artista' required><button>Adicionar</button></form>"+artist_list+
           f"<h2>Regiões</h2><p class='muted'>{regions_hint}</p><form method='post' action='/region'><input type='text' name='code' placeholder='Código, ex. AR' maxlength='2' required><input type='text' name='name' placeholder='Nome, ex. Argentina' required><button>Adicionar região</button></form>{region_list}"
-          "<form method='post' action='/scan'><button>Buscar shows agora</button></form>"
+          "<p class='muted'>As buscas também rodam automaticamente enquanto o app estiver ligado, no intervalo definido por SCAN_INTERVAL_HOURS.</p><form method='post' action='/scan'><button>Buscar shows agora</button></form>"
           f"<h2>Eventos encontrados</h2>{event_list}<p class='muted'>Fonte configurada: Ticketmaster Discovery API. Eventos são anúncios encontrados, não rumores verificados.</p>")
         self.page(content)
 
@@ -188,8 +204,19 @@ class Handler(BaseHTTPRequestHandler):
 def run_server():
     init_db()
     port = int(os.getenv("PORT", "8000"))
-    print(f"RockShowBot rodando em http://localhost:{port}")
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    try:
+        interval_hours = float(os.getenv("SCAN_INTERVAL_HOURS", "12"))
+    except ValueError as exc:
+        raise SystemExit("SCAN_INTERVAL_HOURS precisa ser um número positivo") from exc
+    if interval_hours <= 0:
+        raise SystemExit("SCAN_INTERVAL_HOURS precisa ser maior que zero")
+    scheduler = threading.Thread(target=scheduled_scans, args=(interval_hours,), daemon=True)
+    scheduler.start()
+    print(f"RockShowBot rodando em http://localhost:{port}; buscas automáticas a cada {interval_hours:g}h")
+    try:
+        ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    except KeyboardInterrupt:
+        STOP_SCHEDULER.set()
 
 
 if __name__ == "__main__":
