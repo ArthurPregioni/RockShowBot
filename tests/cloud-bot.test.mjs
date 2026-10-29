@@ -36,3 +36,35 @@ test("Apple developer credentials must allow the current site and remain valid",
   assert.throws(()=>appleConfiguration(valid,"https://other.example"),/outro endereço/);
   assert.throws(()=>appleConfiguration(undefined,"https://shows.example"),/Falta a credencial/);
 });
+
+test("Upcoming calendar uses concert dates regardless of announcement age",async()=>{
+  const requested=[];
+  const events=[
+    {name:'Sepultura tour',dates:{start:{localDate:'2030-05-01'}},published:'2020-01-01'},
+    {name:'Sepultura old show',dates:{start:{localDate:'2020-01-01'}}},
+    {name:'Sepultura canceled show',dates:{start:{localDate:'2030-06-01'},status:{code:'cancelled'}}},
+    {name:'Sepultura postponed',dates:{start:{localDate:'2030-07-01'},status:{code:'postponed'}}},
+    {name:'Sepultura TBD',dates:{start:{localDate:'2030-08-01',dateTBD:true}}},
+    {name:'Sepultura bad date',dates:{start:{localDate:'2030-02-31'}}},
+  ].map((e,i)=>({...e,id:String(i),url:'https://tickets.example/'+i,_embedded:{attractions:[{name:'Sepultura'}]}}));
+  const result=await discover('Sepultura','BR',{ticketmaster:'key',predicthq:'key'},async(input)=>{
+    const url=new URL(input);requested.push(url);
+    if(url.host==='news.google.com')return new Response('<rss/>');
+    if(url.host==='app.ticketmaster.com')return Response.json({_embedded:{events}});
+    return Response.json({results:[{title:'Sepultura',state:'predicted',start:'2030-09-01'},{title:'Sepultura',state:'cancelled',start:'2030-09-02'},{title:'Sepultura',state:'active',start:'2030-09-03',published:'2020-01-01'}]});
+  });
+  assert.deepEqual(result.events.map(e=>e.startsAt),['2030-05-01','2030-09-03']);
+  const tm=requested.find(url=>url.host==='app.ticketmaster.com'),phq=requested.find(url=>url.host==='api.predicthq.com');
+  assert.ok(tm.searchParams.get('startDateTime'));assert.equal(tm.searchParams.has('publicVisibilityStartDateTime'),false);
+  assert.equal(phq.searchParams.get('state'),'active');assert.ok(phq.searchParams.get('start.gte'));
+});
+
+test("Calendar validates real dates and preserves today's concerts around UTC midnight",async()=>{
+  const {todayInBrazil,upcomingDate}=await import('../lib/bot-core.ts');
+  assert.equal(todayInBrazil(new Date('2026-10-30T01:00:00Z')),'2026-10-29');
+  assert.equal(upcomingDate('2026-10-29','2026-10-29'),true);
+  assert.equal(upcomingDate('2026-10-28','2026-10-29'),false);
+  assert.equal(upcomingDate('2027-02-29','2026-10-29'),false);
+  assert.equal(upcomingDate('2028-02-29','2026-10-29'),true);
+  assert.equal(upcomingDate('','2026-10-29'),false);
+});

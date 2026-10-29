@@ -1,6 +1,17 @@
 export function normalize(value: string) {
   return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
+// Concert dates use the dashboard's reference timezone, independently of publication dates.
+export function todayInBrazil(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(now);
+  const get = (type:string) => parts.find(part => part.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+export function upcomingDate(value:unknown, today = todayInBrazil()) {
+  if (typeof value !== "string") return false;
+  const day = value.slice(0,10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) && new Date(day).toISOString().slice(0,10) === day && day >= today;
+}
 export function webURL(value: string) {
   const url = new URL(value);
   if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Informe um link HTTP ou HTTPS válido.");
@@ -84,6 +95,7 @@ export async function discover(artist: string, country: string, keys: { ticketma
   const events: ShowEvent[] = [], warnings: string[] = [];
   const tasks: Promise<void>[] = [];
   const countryName = COUNTRY_NAMES[country] || country;
+  const today = todayInBrazil();
   tasks.push((async () => {
     try {
       const q = `"${artist}" (show OR turnê OR tour OR concierto) "${countryName}" when:30d`;
@@ -94,12 +106,13 @@ export async function discover(artist: string, country: string, keys: { ticketma
   })());
   if (keys.ticketmaster) tasks.push((async () => {
     try {
-      const query = new URLSearchParams({ apikey: keys.ticketmaster!, keyword: artist, countryCode: country, classificationName: "music", size: "50", sort: "date,asc" });
+      const query = new URLSearchParams({ apikey: keys.ticketmaster!, keyword: artist, countryCode: country, classificationName: "music", startDateTime: today + "T00:00:00Z", includeTBA: "no", includeTBD: "no", size: "200", sort: "date,asc" });
       const response = await transport("https://app.ticketmaster.com/discovery/v2/events.json?" + query, { signal: AbortSignal.timeout(12000) });
       if (!response.ok) throw new Error();
       const payload = await response.json() as any;
+      if (payload.page?.totalPages > 1) warnings.push(`Ticketmaster retornou uma lista parcial para ${artist} (${country}); a rotina na nuvem deve complementar a agenda.`);
       for (const event of payload._embedded?.events || []) {
-        if (["cancelled", "canceled"].includes(event.dates?.status?.code)) continue;
+        if (["cancelled", "canceled", "postponed"].includes(event.dates?.status?.code) || event.dates?.start?.dateTBA || event.dates?.start?.dateTBD || !upcomingDate(event.dates?.start?.localDate,today)) continue;
         const attractions = event._embedded?.attractions || [];
         if (attractions.length ? !attractions.some((item: any) => normalize(item.name || "") === normalize(artist)) : !(` ${normalize(event.name || "")} `).includes(` ${normalize(artist)} `)) continue;
         const venue = event._embedded?.venues?.[0] || {};
@@ -109,11 +122,13 @@ export async function discover(artist: string, country: string, keys: { ticketma
   })());
   if (keys.predicthq) tasks.push((async () => {
     try {
-      const query = new URLSearchParams({ q: artist, category: "concerts,festivals", country, "start.gte": new Date().toISOString().slice(0, 10), limit: "50", sort: "start" });
+      const query = new URLSearchParams({ q: artist, category: "concerts,festivals", country, "start.gte": today, state: "active", limit: "50", sort: "start" });
       const response = await transport("https://api.predicthq.com/v1/events/?" + query, { headers: { Authorization: "Bearer " + keys.predicthq }, signal: AbortSignal.timeout(12000) });
       if (!response.ok) throw new Error();
       const payload = await response.json() as any;
+      if (payload.next) warnings.push(`PredictHQ retornou uma lista parcial para ${artist} (${country}); a rotina na nuvem deve complementar a agenda.`);
       for (const event of payload.results || []) {
+        if ((event.state && event.state !== "active") || !upcomingDate(event.start,today)) continue;
         if (!(` ${normalize(event.title || "")} `).includes(` ${normalize(artist)} `) && !(event.entities || []).some((e: any) => normalize(e.name || "") === normalize(artist))) continue;
         events.push({ artist, title: event.title, country, city: "", startsAt: (event.start || "").slice(0, 10), url: "https://www.predicthq.com/events", source: "PredictHQ", status: "listed" });
       }

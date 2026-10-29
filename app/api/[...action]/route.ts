@@ -1,7 +1,7 @@
 import { musicAction } from "../../../lib/music-imports";
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "../../chatgpt-auth";
-import { appleConfiguration, appleLibrary, digest, type Candidate, type ShowEvent } from "../../../lib/bot-core";
+import { appleConfiguration, appleLibrary, digest, todayInBrazil, type Candidate, type ShowEvent } from "../../../lib/bot-core";
 import { addArtist, dashboard, database, scan, settings, SITE_ORIGIN, saveEvents, UserError, watchlist } from "../../../lib/cloud-bot";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +38,8 @@ async function handle(request: Request, context: {params: Promise<{action:string
       if (action === "dashboard") return json(await dashboard());
       if (action === "automation/context") {
         const preferences = await settings();
-        const alerts = preferences.notifications ? (await database().prepare("SELECT * FROM show_events WHERE notified=0 ORDER BY created_at LIMIT 100").all()).results : [];
-        return json({ artists: await watchlist(), settings: {...preferences,countries:JSON.parse(preferences.countries)}, pendingAlerts: alerts, website: SITE_ORIGIN });
+        const alerts = preferences.notifications ? (await database().prepare("SELECT * FROM show_events WHERE notified=0 AND (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN starts_at='' THEN 1 ELSE 0 END, starts_at, created_at LIMIT 100").bind(todayInBrazil(),preferences.countries).all()).results : [];
+        return json({ artists: await watchlist(), settings: {...preferences,countries:JSON.parse(preferences.countries)}, pendingAlerts: alerts, searchScope: {concertDateFrom:todayInBrazil(),announcementDateFilter:null,priority:"official upcoming tour dates, venues, festivals and ticket listings; news and rumors are secondary"}, website: SITE_ORIGIN });
       }
       throw new UserError("Página não encontrada.", 404);
     }

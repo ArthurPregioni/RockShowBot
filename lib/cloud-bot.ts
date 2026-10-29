@@ -1,6 +1,6 @@
 import { musicProviders } from "./music-providers";
 import { env } from "cloudflare:workers";
-import { appleConfiguration, discover, digest, normalize, webURL, type ShowEvent } from "./bot-core";
+import { appleConfiguration, discover, digest, normalize, webURL, todayInBrazil, upcomingDate, type ShowEvent } from "./bot-core";
 
 export const SITE_ORIGIN = "https://rockshowbot-arthur.socialyak11.chatgpt.site";
 export class UserError extends Error { constructor(message: string, public status = 400) { super(message); } }
@@ -23,7 +23,7 @@ export function appleStatus(origin = SITE_ORIGIN) {
 export async function dashboard() {
   const [artists, preferences, shows, lastRun] = await Promise.all([
     watchlist(), settings(),
-    database().prepare("SELECT * FROM show_events ORDER BY created_at DESC LIMIT 120").all(),
+    database().prepare("SELECT * FROM show_events WHERE (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(COALESCE((SELECT countries FROM bot_settings WHERE id=1),'[\"BR\"]'))) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN starts_at='' THEN 1 ELSE 0 END, starts_at, artist, created_at DESC LIMIT 300").bind(todayInBrazil()).all(),
     database().prepare("SELECT * FROM scan_runs ORDER BY created_at DESC LIMIT 1").first(),
   ]);
   return { artists, settings: { ...preferences, countries: JSON.parse(preferences.countries) }, events: shows.results, lastRun,
@@ -48,7 +48,7 @@ export async function saveEvents(input: ShowEvent[]) {
     try { link = webURL(event.url); } catch { continue; }
     if (link.length > 2000) continue;
     const date = typeof event.startsAt === "string" ? event.startsAt.slice(0, 10) : "";
-    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date || date < new Date().toISOString().slice(0, 10))) continue;
+    if (date && !upcomingDate(date)) continue;
     const city = String(event.city || "").slice(0, 160);
     const key = date ? [artist.normalized, date, normalize(city), event.country].join("|") : artist.normalized + "|" + link;
     const id = await digest(key);

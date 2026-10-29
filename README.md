@@ -14,7 +14,7 @@
 3. Marque os artistas e clique em **Importar**. Nenhum artista é adicionado antes da sua confirmação; nomes repetidos são ignorados. Repita com outros serviços ou pesquisas para completar o radar.
 4. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para América Latina.
 5. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. A rotina em nuvem usa o Gmail conectado para enviar um resumo apenas quando houver novidades; mensagens ficam pendentes se o envio falhar.
-6. **Buscar agora** consulta notícias recentes e APIs opcionais. A rotina das 9h e 21h (America/Sao_Paulo) também verifica fontes oficiais na web. Notícias sem confirmação ficam sinalizadas como não verificadas; uma data de publicação não vira data de show.
+6. O radar acompanha **shows que ainda vão acontecer**, mesmo que tenham sido anunciados há meses. O painel ordena pela data do show; eventos passados saem da agenda e dos alertas pendentes. **Buscar agora** consulta as APIs de eventos configuradas e notícias recentes como complemento. A rotina das 9h e 21h (America/Sao_Paulo) prioriza agendas oficiais de artistas, casas, festivais e bilheterias, sem limitar a busca à data de publicação. Consulte **Shows com data** para ver a agenda e **Possíveis shows** para ver notícias e rumores. O retorno das APIs pode ser parcial; o bot não garante cobertura completa de todos os locais. Uma data de publicação nunca vira data de show.
 
 ### Apple Music na instância hospedada
 
@@ -46,7 +46,7 @@ Para desenvolvimento do painel: Node >=22.13, `npm ci`, `npm run dev` e login lo
 
 O painel React/Vinext e as rotas em `app/api/` executam em Cloudflare Workers pelo Sites. As tabelas persistentes D1 são definidas em `db/schema.ts`, com migrações versionadas em `drizzle/`. A identidade e o acesso privado são fornecidos pelo Sites, sem senha local. As rotas `/api/automation/*` dependem desse acesso privado; não publique essa versão como site anônimo sem implementar autorização própria para essas rotas.
 
-A tarefa vinculada consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ticketmaster e PredictHQ são complementos opcionais. A consulta aos artistas da conta Apple Music requer o token de desenvolvedor do aplicativo. O envio na rotina depende de Gmail conectado e de a opção de alertas estar salva.
+A tarefa vinculada consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ela é complementar à agenda: a tarefa em nuvem procura primeiro shows futuros nas fontes oficiais, mesmo quando o anúncio é antigo. Shows esgotados continuam relevantes; shows cancelados e adiados sem nova data não entram como shows marcados. Ticketmaster e PredictHQ são complementos opcionais. A consulta aos artistas da conta Apple Music requer o token de desenvolvedor do aplicativo. O envio na rotina depende de Gmail conectado e de a opção de alertas estar salva.
 
 O código Python abaixo permanece disponível como alternativa self-hosted. Ele não precisa estar executando para a instância Sites funcionar.
 
