@@ -1,49 +1,142 @@
 # RockShowBot
 
-Bot self-hosted que acompanha artistas e envia alertas por e-mail quando encontra eventos anunciados no Brasil ou em outros países. Projeto aberto, pequeno e fácil de estender.
+Aplicação self-hosted que acompanha artistas e manda alertas de eventos por e-mail. Dá para usar sem nenhuma chave de API: cadastre artistas e adicione dicas de shows manualmente. As dicas ficam claramente marcadas como **não verificadas**.
 
-## Requisitos
+## O que já funciona
 
-- Python 3.10+
-- Chave da [Ticketmaster Discovery API](https://developer.ticketmaster.com/) para buscas de eventos
-- SMTP para envio de e-mail (opcional; sem SMTP, eventos são salvos no banco)
+- Cadastro de artistas pela interface e importação de CSV.
+- Brasil ativado por padrão; outros países podem ser adicionados por código ISO de duas letras.
+- Busca de eventos no Ticketmaster e, opcionalmente, no PredictHQ.
+- Dicas manuais da comunidade para anúncios e rumores que as APIs ainda não listaram.
+- Deduplicação de eventos e fila de e-mails que tenta novamente depois de falhas SMTP.
+- Busca manual e agendamento periódico enquanto o serviço estiver ligado.
+- Tela protegida por usuário e senha; endpoint de saúde `/healthz` para a hospedagem.
+- SQLite local e volume persistente no exemplo de deploy do Render.
 
-O app usa apenas a biblioteca padrão do Python. A chave da API é opcional para abrir a interface, mas necessária para buscar eventos.
+## Tutorial rápido: testar sem contas externas
 
-## Rodar localmente
+Você precisa de Python 3.10 ou mais recente. O app e os testes usam apenas a biblioteca padrão.
 
-```sh
-cp .env.example .env
-# Edite .env e configure TICKETMASTER_API_KEY e as variáveis SMTP
-set -a
-. ./.env
-set +a
-python3 rockshowbot.py
+1. Abra a pasta do projeto e crie sua configuração:
+
+   ```sh
+   cp .env.example .env
+   ```
+
+2. Edite `.env` e escolha uma senha longa em `APP_PASSWORD`. Para rodar buscas reais, adicione também uma chave Ticketmaster ou PredictHQ. Sem essas chaves, o cadastro, as dicas manuais e a interface continuam funcionando.
+
+3. Carregue as variáveis e inicie o app (com Bash):
+
+   ```sh
+   set -a
+   . ./.env
+   set +a
+   python3 rockshowbot.py
+   ```
+
+4. Abra <http://localhost:8000>. O navegador pedirá usuário `admin` e a senha que você colocou em `APP_PASSWORD`.
+
+5. Cadastre uma banda, por exemplo `Sepultura`, ou importe `examples/artistas-exemplo.csv` pela seção **Importar CSV**.
+
+6. Em **Dica de possível show**, informe artista, título, data, cidade, região e um link. A data pode ser escolhida no calendário. A dica aparece na lista com o selo **Dica não verificada**. Se houver SMTP configurado, também chega um e-mail.
+
+7. Para testar o envio, preencha seu e-mail, configure SMTP no `.env` e clique em **Enviar e-mail de teste**.
+
+As buscas automáticas ocorrem a cada 12 horas por padrão, enquanto o processo estiver ligado. Mude `SCAN_INTERVAL_HOURS` para outro número de horas. O botão **Buscar shows agora** inicia uma busca manual.
+
+### Configurar fontes de eventos
+
+**Ticketmaster Discovery API**
+
+1. Crie uma chave no [portal de desenvolvedores Ticketmaster](https://developer.ticketmaster.com/).
+2. Coloque-a em `TICKETMASTER_API_KEY` no `.env`.
+3. Reinicie o app e confirme na página que a fonte aparece como ativa.
+
+**PredictHQ (opcional)**
+
+1. Crie uma conta e consulte os planos e limites no [PredictHQ](https://www.predicthq.com/) e na [documentação da API](https://docs.predicthq.com/api/events/search-events).
+2. Coloque o token em `PREDICTHQ_API_KEY`.
+3. Reinicie o app. A cobertura depende do plano/país habilitado na conta, e a busca pode não retornar dados para todos os locais.
+
+O Ticketmaster cobre eventos listados nas plataformas que alimentam a Discovery API; isso não significa cobertura de todos os shows ou casas. A busca confere o nome da banda entre as atrações para reduzir homônimos. O PredictHQ é opcional e seu acesso pode ser pago ou limitado por assinatura. Os resultados dessas fontes significam “listado pelo provedor”, não confirmação diretamente com o artista.
+
+O Songkick informa que não está aprovando projetos de hobby/educação e que seu uso de API requer licença paga; por isso não é tratado como dependência pronta do projeto ([acesso à API](https://www.songkick.com/developer/)). A API do Bandsintown é destinada a artistas e equipes autorizadas, e a chave é vinculada ao artista ([regras de acesso](https://help.artists.bandsintown.com/en/articles/7053475-what-is-the-bandsintown-api)). Não compartilhe chaves pessoais entre instalações.
+
+### E-mail por SMTP
+
+Configure no `.env`:
+
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=seu-usuario
+SMTP_PASSWORD=sua-senha-ou-senha-de-aplicativo
+SMTP_FROM=RockShowBot <voce@example.com>
+SMTP_STARTTLS=true
 ```
 
-Abra http://localhost:8000, cadastre os artistas e informe seu e-mail. Brasil já vem configurado. Para adicionar regiões, use códigos ISO de duas letras, por exemplo AR (Argentina), CL (Chile) ou MX (México). As buscas rodam automaticamente enquanto o app estiver ligado, no intervalo `SCAN_INTERVAL_HOURS` (12 horas por padrão); também é possível buscar manualmente pela interface.
+Use a senha de aplicativo quando seu provedor exigir; não coloque credenciais reais no Git. Salve um endereço de destino na interface e use **Enviar e-mail de teste**. Alertas não enviados ficam pendentes no banco e são tentados de novo na próxima busca.
 
-O banco SQLite local fica em `rockshowbot.db`. Guarde esse arquivo para preservar as preferências; ele está no `.gitignore`.
+## Importar artistas por CSV
 
-## Como funciona
+O importador aceita um nome de artista por linha ou uma coluna com cabeçalho `name`, `artist`, `band`, `artista` ou `banda`. Exemplo:
 
-- A interface permite cadastrar/remover artistas e países monitorados.
-- Uma busca manual consulta eventos anunciados na Ticketmaster.
-- IDs de evento são deduplicados no SQLite; só eventos novos disparam e-mail.
-- As credenciais ficam em variáveis de ambiente e o endereço de e-mail nas configurações locais do SQLite.
-- “Possível show” significa evento listado por uma fonte de eventos. O MVP não tenta confirmar rumores de redes sociais.
+```csv
+artist
+Sepultura
+Angra
+Ratos de Porão
+```
 
-## Adicionar outra fonte
+Artistas repetidos são ignorados. O exemplo `examples/artistas-exemplo.csv` pode ser usado para experimentar a importação.
 
-Implemente um adaptador com `name` e método `find(artist, countries)`, retornando eventos com `id`, `artist`, `title`, `venue`, `city`, `region`, `starts_at`, `url` e `source`. Em seguida, conecte-o à função `scan`. A lista de fontes deve respeitar os termos de uso e limites de cada provedor; evite scraping sem autorização.
+## Hospedar no Render
 
-## Limitações do MVP
+O repositório inclui `Dockerfile` e `render.yaml` para criar um serviço web em Frankfurt, com disco persistente para o SQLite. O blueprint pede que você defina a senha administrativa ao criá-lo.
 
-- Uma fonte de eventos; o agendamento roda apenas enquanto o processo estiver ligado. Para execução contínua, hospede o app em uma máquina ou contêiner que permaneça ativo.
-- A busca por palavra-chave pode trazer homônimos; confira o link do evento.
-- Não há OAuth/importação Spotify/Apple/Deezer. A lista manual evita depender de permissões e políticas de terceiros; integrações podem ser adicionadas como módulos opt-in.
-- O servidor web deve ficar em rede confiável; antes de expor à internet, configure HTTPS e autenticação.
+1. Envie este repositório para um Git remoto que sua conta Render consiga acessar.
+2. No Render, crie um **Blueprint** apontando para o repositório e revise os recursos que ele vai criar antes de aplicar.
+3. O blueprint inclui um serviço web e um disco persistente de 1 GB. **O disco persistente exige um plano pago.** Não aplique o blueprint sem revisar o preço exibido no painel.
+4. No painel do serviço, configure `TICKETMASTER_API_KEY` e, se tiver, `PREDICTHQ_API_KEY`, além das variáveis `SMTP_*`.
+5. Informe uma senha forte para `APP_PASSWORD` quando o Render pedir, faça o deploy e abra a URL `onrender.com`. O usuário é `admin`.
+6. Cadastre artistas e salve seu e-mail na página.
+
+O Render entrega URL pública com HTTPS e espera que o app escute em `0.0.0.0`; esse app usa o `PORT` fornecido pelo serviço. O disco montado em `/var/data` preserva o banco entre reinícios e deploys. O plano grátis pode desligar o processo depois de inatividade, e seu sistema de arquivos padrão é temporário; isso interromperia as buscas agendadas e não preservaria o SQLite. Confira a documentação atual de [Web Services](https://render.com/docs/web-services), [Persistent Disks](https://render.com/docs/disks) e [Blueprints](https://render.com/docs/blueprint-spec).
+
+Não coloque o servidor diretamente na internet sem `APP_PASSWORD`. Use HTTPS para login Basic; o Render termina HTTPS antes de encaminhar o tráfego ao serviço.
+
+### Executar com Docker em outro host
+
+```sh
+docker build -t rockshowbot .
+docker run --name rockshowbot --restart unless-stopped \
+  -p 8000:10000 \
+  -e APP_PASSWORD='escolha-uma-senha-forte' \
+  -e DATABASE_PATH=/var/data/rockshowbot.db \
+  -v rockshowbot-data:/var/data \
+  rockshowbot
+```
+
+Passe as chaves de API e SMTP também com `-e` ou por um arquivo de segredos protegido. Configure domínio e HTTPS no proxy reverso do host.
+
+## Executar os testes
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem enviam mensagens. Cobrem CSV, correspondência de artista, deduplicação, fila de e-mail, dicas comunitárias e autenticação da interface.
+
+## Privacidade e operação
+
+- Este MVP é uma instalação pessoal com um login administrativo compartilhado; não tem cadastro de múltiplos usuários.
+- `APP_PASSWORD` protege a interface. Use uma senha única e HTTPS quando publicada.
+- Chaves de API e SMTP ficam em variáveis de ambiente. O e-mail de destino, artistas, regiões e eventos ficam no SQLite local.
+- Em hospedagem, configure `DATABASE_PATH` dentro do disco persistente e faça backups regulares desse arquivo.
+- O botão de busca e as buscas agendadas consultam todos os provedores configurados para cada artista e país; monitore as cotas dos provedores.
+- A interface aceita dicas pessoais. Elas não passam por moderação externa e recebem o selo de não verificadas.
+- A importação direta via Spotify/Apple Music/Deezer ainda não faz parte desta versão; CSV deixa o usuário manter controle da lista sem conceder acesso à conta de streaming.
 
 ## Licença
 
-MIT. Veja [LICENSE](LICENSE).
+MIT. Consulte [LICENSE](LICENSE).
