@@ -6,7 +6,7 @@ const source=await readFile(new URL('../../extensions/browser/background.js',imp
 function harness(){
  const records={},grants={allowed:true};let listener;
  const storage={get:async key=>key?{[key]:records[key]}:{...records},set:async value=>Object.assign(records,value),remove:async keys=>{for(const key of Array.isArray(keys)?keys:[keys])delete records[key];}};
- const api={runtime:{getURL:path=>'moz-extension://test/'+path,onMessage:{addListener:fn=>listener=fn}},permissions:{contains:async()=>grants.allowed},storage:{session:storage,local:{set:async()=>{}}},tabs:{get:async()=>({id:1,url:'https://music.apple.com/br/library/artists'}),create:async()=>({id:10}),onRemoved:{addListener:()=>{}}},scripting:{executeScript:async args=>args.files?[]:[{result:{ok:true,value:{provider:'apple',artists:[{id:'angra',name:'Angra'}],limited:false,notice:'Test fixture'}}}],getRegisteredContentScripts:async()=>[],registerContentScripts:async()=>{},unregisterContentScripts:async()=>{}}};
+ const api={runtime:{getURL:path=>'moz-extension://test/'+path,onMessage:{addListener:fn=>listener=fn}},permissions:{contains:async()=>grants.allowed},storage:{session:storage,local:{set:async()=>{}}},tabs:{get:async()=>({id:1,url:'https://music.apple.com/br/library/artists'}),create:async()=>({id:10}),onRemoved:{addListener:()=>{}}},scripting:{executeScript:async args=>args.files?[]:[{result:{ok:true,value:{captureFormat:2,provider:'apple',artists:[{id:'angra',name:'Angra'}],limited:false,notice:'Test fixture'}}}],getRegisteredContentScripts:async()=>[],registerContentScripts:async()=>{},unregisterContentScripts:async()=>{}}};
  vm.runInNewContext(source,{browser:api,URL,Date,console});
  const send=(message,sender)=>new Promise(resolve=>{if(!listener(message,sender,resolve))resolve(null);});
  return {send,records,grants};
@@ -20,7 +20,7 @@ test('Capture is accepted only from the extension popup, with an authorized dest
  assert.equal((await h.send({type:'capture',tabId:1,origin:'https://shows.test'},popup)).ok,false);
  h.grants.allowed=true;
  assert.equal((await h.send({type:'capture',tabId:1,origin:'https://shows.test'},popup)).ok,true);
- assert.equal(h.records['import:10'].origin,'https://shows.test');
+ assert.equal(h.records['import:10'].origin,'https://shows.test');assert.equal(h.records['import:10'].captureFormat,2);
 });
 test('Artist handoff is bound to the destination tab, origin and path, expires and is consumed',async()=>{
  const h=harness();await h.send({type:'capture',tabId:1,origin:'https://shows.test'},popup);

@@ -19,7 +19,7 @@
 ### Apple Music e Spotify: importar pelo navegador
 
 1. Abra [a página de importação](https://rockshowbot-arthur.socialyak11.chatgpt.site/music/browser-import) no mesmo navegador que usa para ouvir música.
-2. Baixe o pacote Firefox ou Chromium nessa página e extraia o ZIP.
+2. Baixe o pacote **v0.2.0** Firefox ou Chromium nessa página e extraia o ZIP. Se usou a versão 0.1.0, carregue o `manifest.json` do novo pacote; recarregar a pasta antiga mantém o código antigo. A versão aparece na janela da extensão.
 3. **Firefox:** abra `about:debugging#/runtime/this-firefox`, use **Carregar extensão temporária** e selecione o `manifest.json` extraído. A extensão é removida ao reiniciar o Firefox; a lista já importada continua na nuvem. O pacote ainda não foi publicado/assinado em loja.
 4. **Chrome/Chromium/Edge:** abra `chrome://extensions` ou `edge://extensions`, ative **Modo do desenvolvedor** e use **Carregar sem compactação** para selecionar a pasta extraída.
 5. Entre em [Apple Music](https://music.apple.com/br/library/artists) ou [Spotify](https://open.spotify.com/collection/artists). No Apple Music, abra **Biblioteca → Artistas**. No Spotify, expanda **Sua Biblioteca** e selecione **Artistas**.
@@ -72,6 +72,8 @@ db/, drizzle/          esquema e migrações do banco (na raiz)
 extensions/browser/    código da extensão Firefox e Chromium
 selfhosted/            servidor Python e seus arquivos estáticos
 tests/web/             testes do painel, provedores e extensão
+tests/browser/         regressões do coletor em navegador real
+tests/fixtures/        páginas controladas para regressões
 tests/selfhosted/      testes do servidor Python
 scripts/               build, empacotamento e utilitários
 docs/                  documentação adicional
@@ -100,6 +102,8 @@ O tutorial de instalação, Docker/Render, SMTP e integração pelas APIs fica e
 npm run check:types
 npm run test:web
 npm run test:python
+# Instalar o navegador de QA uma vez: npx playwright install chromium
+npm run test:browser
 node --test tests/selfhosted/apple_music_browser.test.cjs
 ```
 

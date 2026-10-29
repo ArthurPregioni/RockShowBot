@@ -37,7 +37,7 @@ async function take(sender) {
   if(!record||record.expires<Date.now())throw new Error('A leitura expirou ou já foi recebida. Volte à aba de música e importe novamente.');
   if(url.origin!==record.origin||url.pathname!=='/music/browser-import')throw new Error('Endereço de destino inválido.');
   await api.storage.session.remove(key);
-  return {provider:record.provider,artists:record.artists,limited:record.limited,notice:record.notice};
+  return {captureFormat:record.captureFormat,provider:record.provider,artists:record.artists,limited:record.limited,notice:record.notice};
 }
 api.runtime.onMessage.addListener((message,sender,respond)=>{
   if(!message || typeof message!=='object')return false;

@@ -1,0 +1,21 @@
+<!doctype html><html><head><style>
+[data-testid="artist-list-container"] {width:300px}
+#scrollable-page-override {height:120px;overflow:auto;position:relative}
+[data-testid="virtual-rows"] {position:relative}
+[role="option"] {height:54px;box-sizing:border-box}
+</style></head><body><main>
+<div class="artists-container" data-testid="library-artists-component">
+  <div class="artist-list-container" data-testid="artist-list-container">
+    <div class="container" data-testid="container"><div id="scrollable-page-override" class="scrollable-container">
+      <div class="virtual-rows" data-testid="virtual-rows">
+        <div role="option" aria-selected="true" data-testid="library-artists-component"><span class="artist-name">a-ha</span></div>
+        <div role="option" aria-selected="false" data-testid="library-artists-component"><span class="artist-name">Angra</span></div>
+        <div role="option" aria-selected="false" data-testid="library-artists-component"><span class="artist-name">Metallica</span></div>
+      </div>
+    </div></div>
+  </div>
+  <div data-testid="artist-detail-container" aria-label="a-ha">
+    <h1 data-testid="artist-detail-name"><a href="/br/artist/a-ha/166566">a-ha</a></h1>
+    <div data-testid="library-album-component"><a href="/br/library/artists/r.k23lvvs">Hunting High and Low (Deluxe Edition)</a><span class="artist-lockup__title">Hunting High and Low (Deluxe Edition)</span></div>
+  </div>
+</div></main></body></html>

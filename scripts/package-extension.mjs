@@ -21,6 +21,8 @@ for(const target of ['firefox','chromium']){
   const entries=[['manifest.json',await readFile(path.join(root,'extensions/browser',`manifest.${target}.json`))]];
   for(const filename of files)entries.push([filename,await readFile(path.join(root,'extensions/browser',filename))]);
   for(const [name,data]of entries)await writeFile(path.join(directory,name),data);
-  await writeFile(path.join(root,'public/downloads',`rockshowbot-${target}.zip`),zip(entries));
+  const archive=zip(entries),version=JSON.parse(entries[0][1].toString()).version;
+  await writeFile(path.join(root,'public/downloads',`rockshowbot-${target}.zip`),archive);
+  await writeFile(path.join(root,'public/downloads',`rockshowbot-${target}-${version}.zip`),archive);
   console.log(`Extension ${target}: .extension-build/${target}/manifest.json and public/downloads/rockshowbot-${target}.zip`);
 }

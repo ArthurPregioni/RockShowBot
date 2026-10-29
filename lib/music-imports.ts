@@ -53,8 +53,9 @@ export async function musicAction(request:Request,action:string,body:any,owner:s
       return result({url:await spotifyAuthorization(env.SPOTIFY_CLIENT_ID,redirectURI,state,verifier)},header(raw,origin));
     }
     if(action==="music/browser/prepare"){
+      if(body.captureFormat!==2)throw new UserError("Atualize a extensão RockShowBot para a versão 0.2.0 ou mais recente. A versão antiga pode confundir álbuns com artistas.");
       const candidates=browserArtists(body.provider,body.artists);
-      const raw=await create(request,owner,`music:browser-${body.provider}:ready`,candidates);
+      const raw=await create(request,owner,`music:browser-v2-${body.provider}:ready`,candidates);
       return result({provider:body.provider,candidates},header(raw,origin));
     }
     if(action==="music/deezer/artists"||action==="music/catalog"){
@@ -65,6 +66,7 @@ export async function musicAction(request:Request,action:string,body:any,owner:s
     }
     if(action==="music/import"){
       const s=await session(request,owner);
+      if(/^music:browser-(apple|spotify):ready$/.test(s.phase))throw new UserError("Essa leitura veio da extensão antiga. Atualize a extensão e faça uma nova leitura da biblioteca.");
       if(!s.phase.endsWith(":ready"))throw new UserError("Escolha os artistas novamente.");
       if(!Array.isArray(body.ids)||!body.ids.length||body.ids.length>4000)throw new UserError("Selecione ao menos um artista.");
       const claim=await database().prepare("UPDATE music_imports SET phase='music:importing' WHERE id=? AND phase=?").bind(s.id,s.phase).run();
