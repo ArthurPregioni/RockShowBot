@@ -4,7 +4,8 @@ Aplicação self-hosted que acompanha artistas e manda alertas de eventos por e-
 
 ## O que já funciona
 
-- Cadastro de artistas pela interface e importação de CSV.
+- Conexão Spotify com seleção dos artistas seguidos que você quer acompanhar.
+- Cadastro manual de artistas e importação de CSV como alternativa.
 - Brasil ativado por padrão; outros países podem ser adicionados por código ISO de duas letras.
 - Busca de eventos no Ticketmaster e, opcionalmente, no PredictHQ.
 - Dicas manuais da comunidade para anúncios e rumores que as APIs ainda não listaram.
@@ -77,6 +78,23 @@ SMTP_STARTTLS=true
 
 Use a senha de aplicativo quando seu provedor exigir; não coloque credenciais reais no Git. Salve um endereço de destino na interface e use **Enviar e-mail de teste**. Alertas não enviados ficam pendentes no banco e são tentados de novo na próxima busca.
 
+## Conectar Spotify e escolher artistas
+
+1. Abra o [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) e crie um aplicativo com acesso à Web API.
+2. Nas configurações desse aplicativo, registre o endereço de retorno exato:
+   - Na versão hospedada: `https://SEU-SERVICO.onrender.com/spotify/callback`.
+   - Para testar na sua máquina: `http://127.0.0.1:8000/spotify/callback`. Spotify não aceita `localhost` como callback; abra o bot pelo endereço `127.0.0.1` durante esse teste.
+3. Copie o **Client ID** para `SPOTIFY_CLIENT_ID` no ambiente do bot. Defina `SPOTIFY_REDIRECT_URI` com o mesmo endereço cadastrado. O fluxo usa PKCE e não precisa de Client Secret.
+4. No Render, basta configurar o Client ID: quando `SPOTIFY_REDIRECT_URI` estiver ausente, o bot usa `RENDER_EXTERNAL_URL` para montar o callback. Cadastre esse endereço no Dashboard Spotify depois que a URL do serviço existir.
+5. Em **User Management** no Dashboard Spotify, autorize a conta que usará o aplicativo. Em Development Mode, o proprietário precisa ter Spotify Premium e novos aplicativos permitem até cinco usuários autorizados, conforme as [regras atuais](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
+6. Reinicie/reimplante o bot. Clique em **Conectar Spotify**, autorize a leitura e selecione os artistas desejados na tela seguinte. Clique em **Importar selecionados**.
+
+Essa importação lê **artistas que você segue** no Spotify. Para experimentar, siga duas bandas na sua conta, conecte, marque apenas uma e confira se só ela entrou na lista do bot. Repetir a importação ignora os nomes já cadastrados. O bot não segue nem deixa de seguir artistas na sua conta e não consulta seu histórico de reprodução.
+
+Tokens de acesso são descartados depois da consulta. A lista temporária para seleção e o cookie de autorização expiram em até dez minutos. Se o processo reiniciar durante a conexão, clique em Conectar Spotify novamente. Os nomes selecionados ficam no SQLite para monitorar shows; a importação é pontual, sem sincronização automática. A senha da conta Spotify é digitada somente na página do Spotify.
+
+Se o Spotify retornar 403, confira Premium do proprietário e a lista de usuários autorizados. Se recusar o callback, confira endereço, protocolo, porta e caminho exatos conforme as [regras de redirect URI](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
+
 ## Importar artistas por CSV
 
 O importador aceita um nome de artista por linha ou uma coluna com cabeçalho `name`, `artist`, `band`, `artista` ou `banda`. Exemplo:
@@ -125,7 +143,7 @@ Passe as chaves de API e SMTP também com `-e` ou por um arquivo de segredos pro
 python3 -m unittest discover -s tests -v
 ```
 
-Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem enviam mensagens. Cobrem CSV, correspondência de artista, deduplicação, fila de e-mail, dicas comunitárias e autenticação da interface.
+Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem enviam mensagens. Cobrem CSV, correspondência de artista, deduplicação, fila de e-mail, dicas comunitárias e autenticação da interface. O teste de integração Spotify percorre HTTP real no bot (conexão, callback, seleção e gravação), substituindo somente as respostas externas do Spotify. Também confere PKCE, estado vinculado ao navegador, expiração, paginação e descarte dos tokens. Validar o consentimento real exige um aplicativo Spotify configurado e autorização da sua conta.
 
 ## Privacidade e operação
 
@@ -137,7 +155,7 @@ Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem envi
 - Em hospedagem, configure `DATABASE_PATH` dentro do disco persistente e faça backups regulares desse arquivo. A página **Privacidade** explica os dados guardados e a retenção.
 - O botão de busca e as buscas agendadas consultam todos os provedores configurados para cada artista e país; monitore as cotas dos provedores.
 - A interface aceita dicas pessoais. Elas não passam por moderação externa e recebem o selo de não verificadas.
-- A importação direta via Spotify/Apple Music/Deezer ainda não faz parte desta versão; CSV deixa o usuário manter controle da lista sem conceder acesso à conta de streaming.
+- Spotify importa artistas seguidos após autorização e seleção. Apple Music, Deezer e YouTube Music ainda não estão integrados.
 
 ## Licença
 

@@ -6,6 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATABASE_PATH=/var/data/rockshowbot.db
 
 WORKDIR /app
-COPY rockshowbot.py ./
+COPY rockshowbot.py spotify_integration.py ./
 EXPOSE 10000
 CMD ["python", "rockshowbot.py"]
