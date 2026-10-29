@@ -4,7 +4,8 @@ Aplicação self-hosted que acompanha artistas e manda alertas de eventos por e-
 
 ## O que já funciona
 
-- Conexão Spotify com seleção dos artistas seguidos que você quer acompanhar.
+- Apple Music como opção principal: autorize a leitura da biblioteca e escolha os artistas que quer acompanhar.
+- Spotify como integração alternativa, com seleção de artistas seguidos.
 - Cadastro manual de artistas e importação de CSV como alternativa.
 - Brasil ativado por padrão; outros países podem ser adicionados por código ISO de duas letras.
 - Busca de eventos no Ticketmaster e, opcionalmente, no PredictHQ.
@@ -78,7 +79,47 @@ SMTP_STARTTLS=true
 
 Use a senha de aplicativo quando seu provedor exigir; não coloque credenciais reais no Git. Salve um endereço de destino na interface e use **Enviar e-mail de teste**. Alertas não enviados ficam pendentes no banco e são tentados de novo na próxima busca.
 
-## Conectar Spotify e escolher artistas
+## Conectar Apple Music e escolher artistas (recomendado)
+
+O fluxo é **Conectar Apple Music → Autorizar Apple Music → escolher artistas da biblioteca → Importar selecionados**. A leitura consulta os artistas presentes na sua biblioteca; músicas que você apenas escuta sem adicionar à biblioteca podem não aparecer. Esta versão não importa histórico, Replay ou playlists isoladas.
+
+Além da assinatura Apple Music usada na autorização, a versão web precisa de um token assinado com uma chave MusicKit do **Apple Developer Program**. A [documentação de geração de tokens](https://developer.apple.com/documentation/applemusicapi/generating-developer-tokens) explica esse requisito. Nenhuma inscrição ou cobrança é iniciada pelo bot.
+
+### 1. Criar a credencial MusicKit
+
+1. Na conta Apple Developer, abra **Certificates, Identifiers & Profiles**.
+2. Em **Identifiers**, registre um **Media ID** com MusicKit habilitado.
+3. Em **Keys**, crie uma chave **Media Services**, habilite MusicKit e associe-a ao Media ID. Baixe o arquivo `.p8` e guarde-o em local seguro. Anote o **Key ID** e o **Team ID** de dez caracteres. Siga o [guia oficial da Apple](https://developer.apple.com/help/account/capabilities/create-a-media-identifier-and-private-key).
+
+### 2. Gerar o token para a URL da sua instalação
+
+Gere o token localmente; a chave privada `.p8` não precisa sair da sua máquina. O utilitário opcional usa `cryptography`; o servidor do bot continua usando apenas a biblioteca padrão Python.
+
+```sh
+python3 -m venv .venv-token
+.venv-token/bin/python -m pip install -r scripts/requirements-token.txt
+.venv-token/bin/python scripts/create_apple_token.py \
+  --team-id SEUTEAM123 \
+  --key-id SUAKEY1234 \
+  --private-key /caminho/para/AuthKey_SUAKEY1234.p8 \
+  --origin https://SEU-SERVICO.onrender.com
+```
+
+Substitua os IDs e a URL pelos seus valores. O token é salvo em `.apple-music-token`, com permissão restrita, validade padrão de 30 dias e uso limitado à origem informada. O utilitário não sobrescreve arquivos existentes: para renovar, use `--output .apple-music-token-next` e atualize a configuração. `--days` aceita de 1 a 180. O `.gitignore` cobre as chaves `.p8`, os tokens e o ambiente virtual.
+
+### 3. Configurar o bot e testar
+
+- **No Render:** coloque o conteúdo do arquivo gerado em `APPLE_MUSIC_DEVELOPER_TOKEN`, nas variáveis do serviço. O bot usa `RENDER_EXTERNAL_URL` como origem automaticamente. Não envie a chave `.p8` ao servidor. Faça o primeiro deploy para obter a URL e depois gere o token para essa URL exata e atualize o serviço.
+- **Em outro host:** configure `APPLE_MUSIC_DEVELOPER_TOKEN` e `APPLE_MUSIC_ORIGIN=https://seu-dominio`.
+- **Em desenvolvimento local:** gere um token para `http://127.0.0.1:8000`, configure `APPLE_MUSIC_DEVELOPER_TOKEN_FILE=.apple-music-token` e `APPLE_MUSIC_ORIGIN=http://127.0.0.1:8000`. A integração com o provedor deve ser validada no endereço HTTPS hospedado; restrições do navegador/Apple podem afetar origens locais.
+
+Reinicie o app. Clique em **Conectar Apple Music** e depois em **Autorizar Apple Music**, permita a leitura na janela da Apple e marque uma banda na tela de seleção. Confirme que somente essa banda entrou na lista. Ao repetir a importação, nomes já cadastrados são ignorados. A biblioteca Apple Music permanece inalterada.
+
+O token de usuário passa por HTTPS ao backend para consultar a biblioteca e é descartado depois da leitura. O bot pede ao MusicKit para encerrar a autorização local ao terminar a consulta. A lista temporária e o cookie técnico expiram em até dez minutos; somente os nomes selecionados ficam no SQLite. Cada nova importação pede conexão novamente.
+
+Se não aparecer nenhum artista, confira se há músicas ou álbuns adicionados à biblioteca e se a biblioteca está sincronizada com o Apple Music. Se houver erro 401, confira o token de desenvolvedor, sua validade e a origem. Se houver 403, confira a assinatura e autorize novamente. Use a mesma origem exata ao gerar o token e acessar o app; trocar domínio ou protocolo exige um novo token. O login real só pode ser confirmado depois de configurar essa credencial e autorizar sua conta no navegador.
+
+## Conectar Spotify e escolher artistas (alternativa)
 
 1. Abra o [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) e crie um aplicativo com acesso à Web API.
 2. Nas configurações desse aplicativo, registre o endereço de retorno exato:
@@ -143,7 +184,7 @@ Passe as chaves de API e SMTP também com `-e` ou por um arquivo de segredos pro
 python3 -m unittest discover -s tests -v
 ```
 
-Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem enviam mensagens. Cobrem CSV, correspondência de artista, deduplicação, fila de e-mail, dicas comunitárias e autenticação da interface. O teste de integração Spotify percorre HTTP real no bot (conexão, callback, seleção e gravação), substituindo somente as respostas externas do Spotify. Também confere PKCE, estado vinculado ao navegador, expiração, paginação e descarte dos tokens. Validar o consentimento real exige um aplicativo Spotify configurado e autorização da sua conta.
+Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem enviam mensagens. Cobrem CSV, correspondência de artista, deduplicação, fila de e-mail, dicas comunitárias e autenticação da interface. As integrações Apple Music e Spotify percorrem HTTP real no bot até a seleção e gravação, substituindo as respostas externas. Também conferem expiração, paginação e descarte dos tokens, além de PKCE no Spotify. Validar o consentimento real exige credenciais do provedor e autorização da sua conta. Para verificar também a assinatura criptográfica do utilitário Apple, execute a suíte com `.venv-token/bin/python -m unittest discover -s tests -v` depois de instalar sua dependência opcional.
 
 ## Privacidade e operação
 
@@ -155,7 +196,7 @@ Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem envi
 - Em hospedagem, configure `DATABASE_PATH` dentro do disco persistente e faça backups regulares desse arquivo. A página **Privacidade** explica os dados guardados e a retenção.
 - O botão de busca e as buscas agendadas consultam todos os provedores configurados para cada artista e país; monitore as cotas dos provedores.
 - A interface aceita dicas pessoais. Elas não passam por moderação externa e recebem o selo de não verificadas.
-- Spotify importa artistas seguidos após autorização e seleção. Apple Music, Deezer e YouTube Music ainda não estão integrados.
+- Apple Music importa artistas da biblioteca; Spotify importa artistas seguidos. Deezer e YouTube Music ainda não estão integrados.
 
 ## Licença
 

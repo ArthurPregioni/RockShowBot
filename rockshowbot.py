@@ -24,8 +24,10 @@ from email.parser import BytesParser
 from email.policy import default
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
+from pathlib import Path
 
 import spotify_integration as spotify
+import apple_music_integration as apple_music
 
 DB_PATH = os.getenv("DATABASE_PATH", "rockshowbot.db")
 TM_KEY = os.getenv("TICKETMASTER_API_KEY", "")
@@ -338,9 +340,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "same-origin")
+        apple_page = urllib.parse.urlsplit(self.path).path == "/apple-music/connect"
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin" if apple_page else "same-origin")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; form-action 'self' https://accounts.spotify.com; frame-ancestors 'none'; base-uri 'none'")
+        policy = "default-src 'self'; style-src 'unsafe-inline'; form-action 'self' https://accounts.spotify.com; frame-ancestors 'none'; base-uri 'none'"
+        if apple_page:
+            policy += ("; script-src 'self' https://js-cdn.music.apple.com; connect-src 'self' https://*.apple.com https://*.itunes.apple.com;"
+                " frame-src https://*.apple.com https://*.itunes.apple.com; img-src 'self' data: https://*.mzstatic.com; worker-src 'self' blob:")
+        self.send_header("Content-Security-Policy", policy)
         for name, value in headers:
             self.send_header(name, value)
         self.end_headers()
@@ -382,10 +389,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def spotify_session(self):
+        return self.import_session("spotify_import")
+
+    def import_session(self, name):
         cookie = SimpleCookie()
         try:
             cookie.load(self.headers.get("Cookie", ""))
-            return cookie["spotify_import"].value if "spotify_import" in cookie else ""
+            return cookie[name].value if name in cookie else ""
         except Exception:
             return ""
 
@@ -413,7 +423,7 @@ class Handler(BaseHTTPRequestHandler):
             contact_text = f"Contato do administrador: {esc(contact)}." if contact else "O administrador pode informar um contato em ADMIN_CONTACT."
             self.page("<h2>Privacidade</h2><p>Esta instalação é administrada por uma única pessoa. O RockShowBot guarda no banco local o e-mail de alertas, a lista de artistas, as regiões e os eventos/dicas encontrados. Não usa analytics nem cookies de rastreamento.</p>"
                 "<p>Quando habilitadas, as buscas enviam nomes de artistas, códigos de país e chaves de API aos provedores configurados. Os alertas usam o servidor SMTP configurado. Cada provedor pode receber dados técnicos da conexão conforme os próprios termos e políticas.</p>"
-                "<p>A conexão Spotify usa um cookie técnico temporário para proteger a autorização. Os tokens são descartados após consultar os artistas seguidos; somente os nomes selecionados são guardados para acompanhar shows.</p>"
+                "<p>As conexões Apple Music e Spotify usam cookies técnicos temporários para proteger a autorização. Os tokens de usuário são descartados após a consulta; somente os nomes selecionados são guardados para acompanhar shows. O MusicKit da Apple é carregado somente ao abrir a conexão Apple Music.</p>"
                 "<p>O servidor registra horário, IP e caminho das requisições no log do processo/hospedagem. Eventos listados por provedores são removidos 30 dias após a data do show, por padrão. O administrador pode apagar qualquer item pela interface ou apagar o banco SQLite para remover preferências e histórico local. Dicas da comunidade ficam salvas até que o administrador as apague.</p>"
                 f"<p>{contact_text}</p><a href='/'>Voltar</a>")
             return
@@ -421,6 +431,35 @@ class Handler(BaseHTTPRequestHandler):
             return
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/apple-music/connect.js":
+            script = Path(__file__).parent / "static" / "apple-music.js"
+            self.respond(200, script.read_bytes(), "text/javascript; charset=utf-8")
+            return
+        if path in ("/apple-music/connect", "/apple-music/config", "/apple-music/artists"):
+            try:
+                state = self.import_session("apple_music_import")
+                if path in ("/apple-music/config", "/apple-music/connect"):
+                    apple_music.sessions.pending(state)
+                    developer_token, _origin = apple_music.configuration()
+                    if path == "/apple-music/config":
+                        self.respond(200, json.dumps({"developerToken": developer_token}), "application/json")
+                    else:
+                        self.page("<h2>Conectar Apple Music</h2><p>Autorize o acesso à biblioteca para escolher as bandas que deseja acompanhar.</p>"
+                            "<p id='apple-status' role='status'>Carregando MusicKit…</p><button id='apple-authorize' disabled>Autorizar Apple Music</button> "
+                            "<a href='/'>Voltar</a><script src='/apple-music/connect.js'></script>"
+                            "<script id='musickit-sdk' src='https://js-cdn.music.apple.com/musickit/v3/musickit.js' async></script>")
+                    return
+                candidates = apple_music.sessions.candidates(state)
+                choices = "".join(f"<p><label><input type='checkbox' name='artist_id' value='{esc(item['id'])}'> {esc(item['name'])}</label></p>" for item in candidates)
+                self.page("<h2>Artistas da sua biblioteca Apple Music</h2><p>Escolha quais artistas acompanhar. Sua biblioteca permanece inalterada.</p>"
+                    + ("<form method='post' action='/apple-music/import'><div>" + choices + "<button>Importar selecionados</button></div></form>" if choices else "<p>Nenhum artista encontrado. Adicione músicas ou álbuns à biblioteca Apple Music e conecte novamente.</p>")
+                    + "<form method='post' action='/apple-music/cancel'><button>Cancelar importação</button></form>")
+            except apple_music.AppleMusicError as exc:
+                if path == "/apple-music/config":
+                    self.respond(400, json.dumps({"error": str(exc)}), "application/json")
+                else:
+                    self.page(f"<h2>Conexão Apple Music</h2><p>{esc(exc)}</p><a href='/'>Voltar</a>", 400)
+            return
         if path in ("/spotify/callback", "/spotify/artists"):
             try:
                 state = self.spotify_session()
@@ -469,6 +508,11 @@ class Handler(BaseHTTPRequestHandler):
         event_list = "".join(event_cards) or "<p class='muted'>Ainda não há eventos. Use o botão de busca, ou cadastre uma dica.</p>"
         sources = "".join(f"<li>{esc(name)}: <span class='{('good' if active else 'bad')}'>{esc(state)}</span></li>" for name, active, state in source_status())
         select = "".join(f"<option value='{esc(a['name'])}'>{esc(a['name'])}</option>" for a in artists)
+        apple_panel = "<form method='post' action='/apple-music/start'><button>Conectar Apple Music</button></form><p class='muted'>Escolha bandas e artistas da sua biblioteca Apple Music.</p>"
+        try:
+            apple_music.configuration()
+        except apple_music.AppleMusicError:
+            apple_panel = "<p class='muted'>Apple Music precisa ser configurado nesta instalação. Veja o guia de conexão no README.</p>"
         spotify_panel = "<form method='post' action='/spotify/connect'><button>Conectar Spotify</button></form><p class='muted'>Importe artistas seguidos e escolha quais acompanhar.</p>"
         try:
             spotify.configuration()
@@ -478,7 +522,7 @@ class Handler(BaseHTTPRequestHandler):
           f"<div class='panel'><b>Fontes ativas</b><ul>{sources}</ul></div>"
           f"<form method='post' action='/email'><input type='email' name='email' placeholder='Seu e-mail para alertas' value='{esc(setting('email'))}' required><button>Salvar e-mail</button></form>"
           "<form method='post' action='/email/test'><button>Enviar e-mail de teste</button></form>"
-          f"<h2>Bandas / artistas</h2>{spotify_panel}<form method='post' action='/artist'><input type='text' name='name' placeholder='Nome do artista' required><button>Adicionar</button></form>"
+          f"<h2>Bandas / artistas</h2>{apple_panel}<details><summary>Conectar outro serviço</summary>{spotify_panel}</details><form method='post' action='/artist'><input type='text' name='name' placeholder='Nome do artista' required><button>Adicionar</button></form>"
           f"{artist_list}<details><summary>Importar CSV</summary><p class='muted'>Aceita uma coluna ou cabeçalho name, artist, band, artista ou banda.</p>"
           "<form method='post' enctype='multipart/form-data' action='/artists/import'><input type='file' name='file' accept='.csv,text/csv' required><button>Importar artistas</button></form></details>"
           "<h2>Regiões</h2><p class='muted'>Brasil (BR) vem ativado. Códigos ISO de duas letras, como AR, CL, MX, US ou PT.</p>"
@@ -500,6 +544,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self.read_post()
             content_type = self.headers.get("Content-Type", "")
+            if self.path == "/apple-music/library":
+                payload = json.loads(body.decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise apple_music.AppleMusicError("Autorização Apple Music inválida.")
+                apple_music.sessions.fetch(self.import_session("apple_music_import"), payload.get("music_user_token"))
+                self.respond(200, b'{"ok":true}', "application/json")
+                return
             if self.path == "/artists/import":
                 message = BytesParser(policy=default).parsebytes(
                     (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode() + body)
@@ -512,6 +563,26 @@ class Handler(BaseHTTPRequestHandler):
                 return
             form = urllib.parse.parse_qs(body.decode("utf-8"), keep_blank_values=True)
             value = lambda key: form.get(key, [""])[0].strip()
+            if self.path == "/apple-music/start":
+                apple_music.sessions.discard(self.import_session("apple_music_import"))
+                state, secure = apple_music.sessions.start()
+                cookie = f"apple_music_import={state}; Path=/apple-music; HttpOnly; SameSite=Lax; Max-Age=600" + ("; Secure" if secure else "")
+                self.redirect("/apple-music/connect", cookie=cookie)
+                return
+            if self.path in ("/apple-music/import", "/apple-music/cancel"):
+                state = self.import_session("apple_music_import")
+                count = 0
+                if self.path == "/apple-music/import":
+                    candidates = apple_music.sessions.candidates(state)
+                    selected = set(form.get("artist_id", []))
+                    with db() as con:
+                        before = con.total_changes
+                        con.executemany("INSERT OR IGNORE INTO artists(name) VALUES(?)",
+                            [(item["name"],) for item in candidates if item["id"] in selected])
+                        count = con.total_changes - before
+                apple_music.sessions.discard(state)
+                self.redirect("/?imported=" + str(count), cookie="apple_music_import=; Path=/apple-music; HttpOnly; SameSite=Lax; Max-Age=0")
+                return
             if self.path == "/spotify/connect":
                 old_state = self.spotify_session()
                 spotify.sessions.discard(old_state)
@@ -571,6 +642,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Ação inválida")
             self.redirect()
         except Exception as exc:
+            if self.path == "/apple-music/library":
+                message = str(exc) if isinstance(exc, apple_music.AppleMusicError) else "Não foi possível consultar a biblioteca. Conecte novamente."
+                self.respond(400, json.dumps({"error": message}), "application/json")
+                return
             self.page(f"<h2>Não foi possível concluir</h2><p>{esc(exc)}</p><a href='/'>Voltar</a>", 400)
 
     def log_message(self, fmt, *args):
