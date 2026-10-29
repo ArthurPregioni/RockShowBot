@@ -12,7 +12,7 @@
 
 ### Apple Music na instância hospedada
 
-A importação auxiliar de **playlist pública** não vincula a conta, não acessa a biblioteca privada e não mantém sincronização. Ela lê os dados publicados no link `music.apple.com` fornecido pelo usuário e abre uma seleção pontual de artistas. Essa ferramenta aparece separada da conexão de conta. Nenhuma playlist é tornada pública pelo bot. O importador depende do formato da página pública e informa um erro se os artistas não estiverem disponíveis.
+O fluxo de importação recebe os **artistas da biblioteca autorizada**, mostra a lista para seleção e acompanha apenas os artistas escolhidos. A importação por playlist foi removida da interface, da API e do parser.
 
 Para acessar a **biblioteca privada**, a Apple exige uma credencial MusicKit do Apple Developer Program, obtida por quem mantém o aplicativo. Depois de configurá-la, ainda é necessário validar o login e a autorização com uma conta real. O fluxo implementado consulta a biblioteca uma vez e descarta o token do usuário; uma vinculação persistente com sincronização ainda não foi implementada.
 
@@ -22,7 +22,7 @@ Use o utilitário documentado abaixo com `--origin https://rockshowbot-arthur.so
 
 O painel React/Vinext e as rotas em `app/api/` executam em Cloudflare Workers pelo Sites. As tabelas persistentes D1 são definidas em `db/schema.ts`, com migrações versionadas em `drizzle/`. A identidade e o acesso privado são fornecidos pelo Sites, sem senha local. As rotas `/api/automation/*` dependem desse acesso privado; não publique essa versão como site anônimo sem implementar autorização própria para essas rotas.
 
-A tarefa vinculada consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ticketmaster e PredictHQ são complementos opcionais. No Apple Music, só a conexão da biblioteca privada requer o token de desenvolvedor; a importação de playlist pública não requer. O envio na rotina depende de Gmail conectado e de a opção de alertas estar salva.
+A tarefa vinculada consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ticketmaster e PredictHQ são complementos opcionais. A consulta aos artistas da conta Apple Music requer o token de desenvolvedor do aplicativo. O envio na rotina depende de Gmail conectado e de a opção de alertas estar salva.
 
 O código Python abaixo permanece disponível como alternativa self-hosted. Ele não precisa estar executando para a instância Sites funcionar.
 
@@ -107,7 +107,7 @@ Use a senha de aplicativo quando seu provedor exigir; não coloque credenciais r
 
 ## Configuração de desenvolvimento Apple Music (pendente)
 
-O fluxo é **Conectar Apple Music → Autorizar Apple Music → escolher artistas da biblioteca → Importar selecionados**. A leitura consulta os artistas presentes na sua biblioteca; músicas que você apenas escuta sem adicionar à biblioteca podem não aparecer. Esta versão não importa histórico, Replay ou playlists isoladas.
+O fluxo é **Conectar Apple Music → Autorizar Apple Music → escolher artistas da biblioteca → Importar selecionados**. A leitura consulta os artistas presentes na sua biblioteca; músicas que você apenas escuta sem adicionar à biblioteca podem não aparecer. O usuário escolhe artistas diretamente na lista retornada pela biblioteca; histórico e Replay não fazem parte dessa leitura.
 
 Além da assinatura Apple Music usada na autorização, a versão web precisa de um token assinado com uma chave MusicKit do **Apple Developer Program**. A [documentação de geração de tokens](https://developer.apple.com/documentation/applemusicapi/generating-developer-tokens) explica esse requisito. Nenhuma inscrição ou cobrança é iniciada pelo bot.
 
