@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {appleLibrary,appleConfiguration,newsItems,discover,normalize} from "../lib/bot-core.ts";
+import {appleLibrary,appleConfiguration,newsItems,discover,normalize} from "../../lib/bot-core.ts";
 
 test("Apple library pagination reads candidates without disclosing tokens to another host",async()=>{
   const requests=[];
@@ -60,7 +60,7 @@ test("Upcoming calendar uses concert dates regardless of announcement age",async
 });
 
 test("Calendar validates real dates and preserves today's concerts around UTC midnight",async()=>{
-  const {todayInBrazil,upcomingDate}=await import('../lib/bot-core.ts');
+  const {todayInBrazil,upcomingDate}=await import('../../lib/bot-core.ts');
   assert.equal(todayInBrazil(new Date('2026-10-30T01:00:00Z')),'2026-10-29');
   assert.equal(upcomingDate('2026-10-29','2026-10-29'),true);
   assert.equal(upcomingDate('2026-10-28','2026-10-29'),false);

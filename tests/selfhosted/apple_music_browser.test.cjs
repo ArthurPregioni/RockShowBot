@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "../static/apple-music.js"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "../../selfhosted/static/apple-music.js"), "utf8");
 const tick = () => new Promise(setImmediate);
 
 function harness({ userToken = "user-test-token", libraryError = null, configurationError = null } = {}) {

@@ -11,7 +11,7 @@ from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
 import rockshowbot as bot
-import spotify_integration as spotify
+from selfhosted import spotify_integration as spotify
 
 
 class SpotifyTests(unittest.TestCase):

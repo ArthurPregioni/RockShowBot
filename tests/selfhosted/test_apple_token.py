@@ -20,7 +20,7 @@ class AppleTokenTests(unittest.TestCase):
             key = ec.generate_private_key(ec.SECP256R1())
             key_file, output = directory / "test.p8", directory / "test-token"
             key_file.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
-            script = Path(__file__).resolve().parents[1] / "scripts" / "create_apple_token.py"
+            script = Path(__file__).resolve().parents[2] / "scripts" / "create_apple_token.py"
             command = [sys.executable, str(script), "--team-id", "TESTTEAM12", "--key-id", "TESTKEY123",
                 "--private-key", str(key_file), "--origin", "https://shows.example", "--output", str(output)]
             subprocess.run(command, check=True, capture_output=True, text=True)

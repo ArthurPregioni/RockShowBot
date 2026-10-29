@@ -1,4 +1,4 @@
-import {readFile,mkdir,writeFile,copyFile} from 'node:fs/promises';
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -18,8 +18,8 @@ function zip(entries){
 await mkdir(path.join(root,'public/downloads'),{recursive:true});
 for(const target of ['firefox','chromium']){
   const directory=path.join(root,'.extension-build',target);await mkdir(directory,{recursive:true});
-  const entries=[['manifest.json',await readFile(path.join(root,'browser-extension',`manifest.${target}.json`))]];
-  for(const filename of files)entries.push([filename,await readFile(path.join(root,'browser-extension',filename))]);
+  const entries=[['manifest.json',await readFile(path.join(root,'extensions/browser',`manifest.${target}.json`))]];
+  for(const filename of files)entries.push([filename,await readFile(path.join(root,'extensions/browser',filename))]);
   for(const [name,data]of entries)await writeFile(path.join(directory,name),data);
   await writeFile(path.join(root,'public/downloads',`rockshowbot-${target}.zip`),zip(entries));
   console.log(`Extension ${target}: .extension-build/${target}/manifest.json and public/downloads/rockshowbot-${target}.zip`);

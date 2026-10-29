@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-const source=await readFile(new URL('../browser-extension/background.js',import.meta.url),'utf8');
+const source=await readFile(new URL('../../extensions/browser/background.js',import.meta.url),'utf8');
 function harness(){
  const records={},grants={allowed:true};let listener;
  const storage={get:async key=>key?{[key]:records[key]}:{...records},set:async value=>Object.assign(records,value),remove:async keys=>{for(const key of Array.isArray(keys)?keys:[keys])delete records[key];}};

@@ -10,7 +10,7 @@ import unittest
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
-import apple_music_integration as apple
+from selfhosted import apple_music_integration as apple
 import rockshowbot as bot
 
 

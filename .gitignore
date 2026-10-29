@@ -56,3 +56,6 @@ yarn-error.log*
 # Generated browser extensions
 /.extension-build/
 /public/downloads/rockshowbot-*.zip
+
+# TypeScript incremental state
+/.cache/

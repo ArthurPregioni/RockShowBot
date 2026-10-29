@@ -31,7 +31,8 @@
       "node",
       "@cloudflare/workers-types"
     ],
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "tsBuildInfoFile": ".cache/typescript.tsbuildinfo"
   },
   "include": [
     "next-env.d.ts",
