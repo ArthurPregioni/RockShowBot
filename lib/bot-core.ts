@@ -80,7 +80,7 @@ export async function publicApplePlaylist(value:string,transport:typeof fetch=fe
 export type ShowEvent = { id?: string; artist: string; title: string; country: string; city: string; startsAt: string; url: string; source: string; status: "listed" | "unverified" };
 
 export function appleConfiguration(token: string | undefined, origin: string) {
-  if (!token) throw new Error("Falta a credencial MusicKit desta instalação. Abra Configurar Apple Music para continuar.");
+  if (!token) throw new Error("Falta a credencial MusicKit do aplicativo. A vinculação de conta está indisponível.");
   try {
     const decode = (part: string) => JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/")));
     const parts = token.split(".");

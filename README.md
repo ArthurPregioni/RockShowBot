@@ -5,16 +5,16 @@
 ## Usar a versão hospedada
 
 1. Abra o link acima e entre com sua conta.
-2. No cartão **Apple Music**, clique em **Importar do Apple Music**, cole o link de uma playlist pública e escolha os artistas. Esse caminho funciona sem conta Apple Developer. No app Apple Music, use **Compartilhar playlist → Copiar link**. São lidos os artistas que a página pública disponibiliza; uma playlist privada ou muito longa pode não disponibilizar todos.
+2. **A vinculação da conta Apple Music ainda não está disponível nesta instância.** Falta uma credencial MusicKit do aplicativo, e o login com uma conta real não foi validado. O responsável pelo projeto precisa resolver essa pendência para oferecer a conexão aos usuários. O botão permanece desabilitado enquanto essa configuração estiver ausente.
 3. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para América Latina.
 4. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. A rotina em nuvem usa o Gmail conectado para enviar um resumo apenas quando houver novidades; mensagens ficam pendentes se o envio falhar.
 5. **Buscar agora** consulta notícias recentes e APIs opcionais. A rotina das 9h e 21h (America/Sao_Paulo) também verifica fontes oficiais na web. Notícias sem confirmação ficam sinalizadas como não verificadas; uma data de publicação não vira data de show.
 
 ### Apple Music na instância hospedada
 
-A importação de **playlist pública** já está disponível e não pede token de desenvolvedor nem login da sua conta. Ela lê os dados publicados no link `music.apple.com` que você fornecer e abre a seleção de artistas. Nenhuma playlist é tornada pública pelo bot. Esse importador depende do formato da página pública da Apple e informa um erro se os artistas não estiverem disponíveis; ele não contorna acesso a playlists privadas.
+A importação auxiliar de **playlist pública** não vincula a conta, não acessa a biblioteca privada e não mantém sincronização. Ela lê os dados publicados no link `music.apple.com` fornecido pelo usuário e abre uma seleção pontual de artistas. Essa ferramenta aparece separada da conexão de conta. Nenhuma playlist é tornada pública pelo bot. O importador depende do formato da página pública e informa um erro se os artistas não estiverem disponíveis.
 
-Para a integração opcional da **biblioteca privada**, a Apple exige uma credencial MusicKit do Apple Developer Program. A autorização do assinante é solicitada na janela da Apple depois que essa credencial estiver pronta. Essa configuração está no botão **Sobre a biblioteca privada**.
+Para acessar a **biblioteca privada**, a Apple exige uma credencial MusicKit do Apple Developer Program, obtida por quem mantém o aplicativo. Depois de configurá-la, ainda é necessário validar o login e a autorização com uma conta real. O fluxo implementado consulta a biblioteca uma vez e descarta o token do usuário; uma vinculação persistente com sincronização ainda não foi implementada.
 
 Use o utilitário documentado abaixo com `--origin https://rockshowbot-arthur.socialyak11.chatgpt.site`. O token assinado é configurado como segredo `APPLE_MUSIC_DEVELOPER_TOKEN` nas variáveis de produção do Site. A chave privada `.p8` fica na sua máquina. Peça ao assistente para configurar o token quando o arquivo estiver pronto; não é necessário manter nenhum processo local ligado.
 
@@ -30,7 +30,7 @@ Aplicação self-hosted que acompanha artistas e manda alertas de eventos por e-
 
 ## O que já funciona
 
-- Apple Music como opção principal: autorize a leitura da biblioteca e escolha os artistas que quer acompanhar.
+- Apple Music: fluxo de consulta da biblioteca implementado, mas ainda sem credencial do aplicativo ou validação com uma conta real nesta instância. A vinculação de conta não está entregue.
 - Spotify como integração alternativa, com seleção de artistas seguidos.
 - Cadastro manual de artistas e importação de CSV como alternativa.
 - Brasil ativado por padrão; outros países podem ser adicionados por código ISO de duas letras.
@@ -105,7 +105,7 @@ SMTP_STARTTLS=true
 
 Use a senha de aplicativo quando seu provedor exigir; não coloque credenciais reais no Git. Salve um endereço de destino na interface e use **Enviar e-mail de teste**. Alertas não enviados ficam pendentes no banco e são tentados de novo na próxima busca.
 
-## Conectar Apple Music e escolher artistas (recomendado)
+## Configuração de desenvolvimento Apple Music (pendente)
 
 O fluxo é **Conectar Apple Music → Autorizar Apple Music → escolher artistas da biblioteca → Importar selecionados**. A leitura consulta os artistas presentes na sua biblioteca; músicas que você apenas escuta sem adicionar à biblioteca podem não aparecer. Esta versão não importa histórico, Replay ou playlists isoladas.
 
