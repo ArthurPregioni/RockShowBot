@@ -8,3 +8,9 @@
 *.db
 tests
 scripts
+node_modules
+dist
+.vinext
+.wrangler
+.sites-runtime
+outputs
