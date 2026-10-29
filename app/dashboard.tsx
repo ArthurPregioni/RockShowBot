@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, ChevronRight, CircleHelp, Cloud, Disc3, Globe2, Mail, Music2, Plus, Radio, RefreshCw, Search, Ticket, Trash2, X } from "lucide-react";
 import { COUNTRY_NAMES } from "../lib/bot-core";
 type Artist={id:string;name:string};
@@ -23,8 +23,9 @@ function loadMusicKit(){
 }
 function Modal({title,children,onClose}:{title:string;children:ReactNode;onClose:()=>void}){
   const element=useRef<HTMLDialogElement>(null);
+  const titleId=useId();
   useEffect(()=>{element.current?.showModal();return()=>element.current?.close();},[]);
-  return <dialog ref={element} className="modal" onCancel={e=>{e.preventDefault();onClose();}}><div className="modal-heading"><h2>{title}</h2><button className="icon-button" aria-label="Fechar" onClick={onClose}><X size={20}/></button></div>{children}</dialog>;
+  return <dialog ref={element} className="modal" aria-labelledby={titleId} onCancel={e=>{e.preventDefault();onClose();}}><div className="modal-heading"><h2 id={titleId}>{title}</h2><button className="icon-button" aria-label="Fechar" onClick={onClose}><X size={20}/></button></div>{children}</dialog>;
 }
 export default function Dashboard({displayName,email}:{displayName:string;email:string}){
   const [data,setData]=useState<Data|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState("");
