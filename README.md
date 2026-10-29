@@ -1,5 +1,29 @@
 # RockShowBot
 
+**Instância pessoal hospedada:** [abrir RockShowBot](https://rockshowbot-arthur.socialyak11.chatgpt.site). O acesso é privado pela conta ChatGPT do proprietário. O painel, banco e buscas agendadas ficam na nuvem; seu computador pode ficar desligado.
+
+## Usar a versão hospedada
+
+1. Abra o link acima e entre com sua conta.
+2. O cartão **Apple Music** está no topo: quando a credencial MusicKit estiver configurada, clique para autorizar e escolher artistas. Enquanto isso, você pode adicionar bandas no campo **Artistas no radar**.
+3. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para América Latina.
+4. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. A rotina em nuvem usa o Gmail conectado para enviar um resumo apenas quando houver novidades; mensagens ficam pendentes se o envio falhar.
+5. **Buscar agora** consulta notícias recentes e APIs opcionais. A rotina das 9h e 21h (America/Sao_Paulo) também verifica fontes oficiais na web. Notícias sem confirmação ficam sinalizadas como não verificadas; uma data de publicação não vira data de show.
+
+### Ativar Apple Music na instância hospedada
+
+A Apple exige uma credencial MusicKit do Apple Developer Program para essa integração web. A sua autorização de assinante é solicitada na janela da Apple depois que essa credencial estiver pronta. O cartão sempre mostra o estado atual da conexão; a integração não fica escondida quando falta configuração.
+
+Use o utilitário documentado abaixo com `--origin https://rockshowbot-arthur.socialyak11.chatgpt.site`. O token assinado é configurado como segredo `APPLE_MUSIC_DEVELOPER_TOKEN` nas variáveis de produção do Site. A chave privada `.p8` fica na sua máquina. Peça ao assistente para configurar o token quando o arquivo estiver pronto; não é necessário manter nenhum processo local ligado.
+
+### Arquitetura da versão hospedada
+
+O painel React/Vinext e as rotas em `app/api/` executam em Cloudflare Workers pelo Sites. As tabelas persistentes D1 são definidas em `db/schema.ts`, com migrações versionadas em `drizzle/`. A identidade e o acesso privado são fornecidos pelo Sites, sem senha local. As rotas `/api/automation/*` dependem desse acesso privado; não publique essa versão como site anônimo sem implementar autorização própria para essas rotas.
+
+A tarefa vinculada consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ticketmaster e PredictHQ são complementos opcionais. A conexão Apple Music requer o token de desenvolvedor. O envio na rotina depende de Gmail conectado e de a opção de alertas estar salva.
+
+O código Python abaixo permanece disponível como alternativa self-hosted. Ele não precisa estar executando para a instância Sites funcionar.
+
 Aplicação self-hosted que acompanha artistas e manda alertas de eventos por e-mail. Dá para usar sem nenhuma chave de API: cadastre artistas e adicione dicas de shows manualmente. As dicas ficam claramente marcadas como **não verificadas**.
 
 ## O que já funciona

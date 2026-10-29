@@ -2,11 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Starter Project",
-  description: "A clean starting point for building your site.",
-  other: {
-    "codex-preview": "development",
-  },
+  title: "RockShowBot — seu próximo show começa aqui",
+  description: "Seu radar pessoal de shows. Conecte o Apple Music e acompanhe anúncios e possíveis datas no Brasil e exterior.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
@@ -19,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body className="antialiased">{children}</body>
     </html>
   );
