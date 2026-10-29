@@ -186,6 +186,14 @@ python3 -m unittest discover -s tests -v
 
 Os testes usam provedores e e-mail falsos; não fazem chamadas externas nem enviam mensagens. Cobrem CSV, correspondência de artista, deduplicação, fila de e-mail, dicas comunitárias e autenticação da interface. As integrações Apple Music e Spotify percorrem HTTP real no bot até a seleção e gravação, substituindo as respostas externas. Também conferem expiração, paginação e descarte dos tokens, além de PKCE no Spotify. Validar o consentimento real exige credenciais do provedor e autorização da sua conta. Para verificar também a assinatura criptográfica do utilitário Apple, execute a suíte com `.venv-token/bin/python -m unittest discover -s tests -v` depois de instalar sua dependência opcional.
 
+O código de autorização do navegador tem testes separados (Node.js 22+):
+
+```sh
+node --test tests/apple_music_browser.test.cjs
+```
+
+Esses testes substituem o SDK MusicKit por um simulador e verificam cancelamento, mensagens de erro e descarte da autorização antes de abrir a seleção; não equivalem ao login real com a Apple.
+
 ## Privacidade e operação
 
 - Este MVP é uma instalação pessoal com um login administrativo compartilhado; não tem cadastro de múltiplos usuários.

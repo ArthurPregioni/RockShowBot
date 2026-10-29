@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+*.p8
+.apple-music-token*
+.venv*
+**/__pycache__
+*.db
+tests
+scripts

@@ -44,8 +44,6 @@ test("Apple authorization sends the token in a POST body and clears SDK authoriz
 });
 
 test("Canceling Apple consent sends no library request", async () => {
-  const app = harness({ userToken: undefined });
-  // Use null because the harness defaults undefined to the successful test token.
   const canceled = harness({ userToken: null });
   await tick();
   await canceled.click();
