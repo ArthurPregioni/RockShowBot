@@ -16,6 +16,67 @@ export const COUNTRY_NAMES: Record<string, string> = {
   US: "Estados Unidos", CA: "Canadá", PT: "Portugal", ES: "Espanha", GB: "Reino Unido", FR: "França", DE: "Alemanha", AU: "Austrália", JP: "Japão",
 };
 export type Candidate = { id: string; name: string };
+export function publicPlaylistURL(value: string) {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error("Cole o link completo de uma playlist pública do Apple Music."); }
+  if (url.protocol !== "https:" || url.hostname !== "music.apple.com" || url.port || url.username || url.password
+      || !/^\/(?:[a-z]{2}\/)?playlist\/[^/]+\/pl\.[A-Za-z0-9._-]+\/?$/.test(url.pathname)) {
+    throw new Error("Use um link de playlist pública em https://music.apple.com/…/playlist/…");
+  }
+  url.search="";url.hash="";
+  return url.href;
+}
+export function parsePublicPlaylist(html: string) {
+  let name = "Playlist Apple Music", advertisedTracks = 0;
+  let data: unknown;
+  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    if (/\bid\s*=\s*["']?serialized-server-data\b/.test(match[1])) {
+      try { data=JSON.parse(match[2]); } catch { /* Report an unreadable page below. */ }
+    }
+    if (/application\/ld\+json/.test(match[1])) {
+      try {const schema=JSON.parse(match[2]);if(schema["@type"]==="MusicPlaylist"){name=String(schema.name||name);advertisedTracks=Number(schema.numTracks)||0;}}catch{}
+    }
+  }
+  const found=new Map<string,Candidate>(),tracks=new Set<string>();let visited=0;
+  function walk(value:any,depth=0) {
+    if(!value||typeof value!=="object"||depth>35||++visited>100000)return;
+    if(value.contentDescriptor?.kind==="song"&&typeof value.artistName==="string"){
+      tracks.add(String(value.contentDescriptor.identifiers?.storeAdamID||value.id));
+      let linked=false;
+      for(const link of value.subtitleLinks||[]){
+        const artist=link.segue?.destination?.contentDescriptor;
+        if(artist?.kind==="artist"&&typeof link.title==="string"&&link.title.trim()){
+          const id=String(artist.identifiers?.storeAdamID||normalize(link.title));
+          found.set(id,{id,name:link.title.trim()});linked=true;
+        }
+      }
+      if(!linked&&value.artistName.trim()){
+        const id="name:"+normalize(value.artistName);found.set(id,{id,name:value.artistName.trim()});
+      }
+    }
+    for(const child of Array.isArray(value)?value:Object.values(value))walk(child,depth+1);
+  }
+  walk(data);
+  if(!found.size)throw new Error("Não encontrei artistas nessa página pública. Confira se a playlist está pública e contém músicas. O formato da página Apple Music também pode ter mudado.");
+  return {name,candidates:[...found.values()].sort((a,b)=>a.name.localeCompare(b.name)),visibleTracks:tracks.size,advertisedTracks};
+}
+export async function publicApplePlaylist(value:string,transport:typeof fetch=fetch){
+  let url=publicPlaylistURL(value);
+  for(let redirects=0;redirects<4;redirects++){
+    const response=await transport(url,{redirect:"manual",signal:AbortSignal.timeout(20000),headers:{Accept:"text/html","User-Agent":"RockShowBot/1.0 public playlist import"}});
+    if([301,302,303,307,308].includes(response.status)){
+      const location=response.headers.get("location");if(!location)throw new Error("A playlist não está disponível publicamente.");
+      url=publicPlaylistURL(new URL(location,url).href);continue;
+    }
+    if(!response.ok)throw new Error("Não foi possível abrir essa playlist pública no Apple Music. Confira o link e tente novamente.");
+    if(!response.body)throw new Error("A playlist retornou uma página vazia.");
+    const reader=response.body.getReader();const decoder=new TextDecoder();let html="",size=0;
+    try{while(true){const{value:chunk,done}=await reader.read();if(done)break;size+=chunk.byteLength;if(size>4000000)throw new Error("A página da playlist é muito grande. Tente uma playlist menor.");html+=decoder.decode(chunk,{stream:true});}html+=decoder.decode();}
+    finally{await reader.cancel();}
+    return {...parsePublicPlaylist(html),url};
+  }
+  throw new Error("O link da playlist redirecionou muitas vezes. Cole a URL final do Apple Music.");
+}
 export type ShowEvent = { id?: string; artist: string; title: string; country: string; city: string; startsAt: string; url: string; source: string; status: "listed" | "unverified" };
 
 export function appleConfiguration(token: string | undefined, origin: string) {

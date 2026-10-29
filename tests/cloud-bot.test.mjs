@@ -1,6 +1,19 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {appleLibrary,appleConfiguration,newsItems,discover,normalize} from "../lib/bot-core.ts";
+import {appleLibrary,appleConfiguration,publicApplePlaylist,publicPlaylistURL,parsePublicPlaylist,newsItems,discover,normalize} from "../lib/bot-core.ts";
+
+const playlistHTML = `<script type="application/ld+json">{"@type":"MusicPlaylist","name":"Minha playlist","numTracks":2}</script><script type="application/json" id="serialized-server-data">${JSON.stringify({data:[{contentDescriptor:{kind:"song",identifiers:{storeAdamID:"track1"}},artistName:"Angra",subtitleLinks:[{title:"Angra",segue:{destination:{contentDescriptor:{kind:"artist",identifiers:{storeAdamID:"a"}}}}}]},{contentDescriptor:{kind:"song",identifiers:{storeAdamID:"track2"}},artistName:"Angra",subtitleLinks:[{title:"Angra",segue:{destination:{contentDescriptor:{kind:"artist",identifiers:{storeAdamID:"a"}}}}}]},{contentDescriptor:{kind:"playlist"},title:"Curador da playlist"}]})}</script>`;
+test("Public Apple playlists import only track artists, deduplicate, and keep a source title",()=>{
+  const result=parsePublicPlaylist(playlistHTML);assert.equal(result.name,"Minha playlist");assert.equal(result.visibleTracks,2);assert.deepEqual(result.candidates,[{id:"a",name:"Angra"}]);
+  assert.throws(()=>parsePublicPlaylist('<html>Private playlist</html>'),/Não encontrei artistas/);
+});
+test("Playlist imports allow only Apple public playlist URLs and reject hostile redirects",async()=>{
+  const url="https://music.apple.com/br/playlist/minha/pl.u-abc123";
+  assert.equal(publicPlaylistURL(url+"?tracking=example"),url);
+  for(const invalid of ["http://127.0.0.1/playlist/x/pl.u-abc","https://music.apple.com.untrusted.example/br/playlist/x/pl.u-abc","https://user:password@music.apple.com/br/playlist/x/pl.u-abc","https://music.apple.com/us/artist/a/123"]){assert.throws(()=>publicPlaylistURL(invalid));}
+  await assert.rejects(()=>publicApplePlaylist(url,async()=>new Response(null,{status:302,headers:{location:"https://untrusted.example/steal"}})),/link de playlist/);
+  const result=await publicApplePlaylist(url,async()=>new Response(playlistHTML));assert.equal(result.candidates[0].name,"Angra");
+});
 
 test("Apple library pagination reads candidates without disclosing tokens to another host",async()=>{
   const requests=[];

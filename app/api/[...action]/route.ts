@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "../../chatgpt-auth";
-import { appleConfiguration, appleLibrary, digest, normalize, type Candidate, type ShowEvent } from "../../../lib/bot-core";
+import { appleConfiguration, appleLibrary, publicApplePlaylist, digest, type Candidate, type ShowEvent } from "../../../lib/bot-core";
 import { addArtist, dashboard, database, scan, settings, SITE_ORIGIN, saveEvents, UserError, watchlist } from "../../../lib/cloud-bot";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +78,15 @@ async function handle(request: Request, context: {params: Promise<{action:string
       if (body.schedule !== "active") throw new UserError("Estado inválido.");
       await database().prepare("INSERT INTO bot_settings(id,schedule) VALUES(1,'active') ON CONFLICT(id) DO UPDATE SET schedule='active'").run();
       return json({ok:true});
+    }
+    if (action === "apple/playlist") {
+      let playlist;
+      try{playlist=await publicApplePlaylist(typeof body.url==="string"?body.url:"");}catch(error){throw new UserError((error as Error).message);}
+      const raw=crypto.randomUUID()+crypto.randomUUID(),id=await digest(raw);
+      await database().prepare("DELETE FROM music_imports WHERE owner=? OR expires<?").bind(user!.userId,Date.now()).run();
+      await database().prepare("INSERT INTO music_imports(id,owner,phase,expires,candidates) VALUES(?,?,'ready',?,?)")
+        .bind(id,user!.userId,Date.now()+600000,JSON.stringify(playlist.candidates)).run();
+      return json(playlist,200,cookieHeader(raw,originFor(request)));
     }
     if (action === "apple/start") {
       let token: string;
