@@ -9,8 +9,10 @@ import hashlib
 import html
 import io
 import json
+import math
 import os
 import re
+import signal
 import smtplib
 import sqlite3
 import threading
@@ -416,7 +418,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/healthz":
-            self.respond(200, b'{"status":"ok"}', "application/json")
+            self.respond(200, b'{"status":"ok","app":"RockShowBot"}', "application/json")
             return
         if self.path == "/privacy":
             contact = os.getenv("ADMIN_CONTACT", "").strip()
@@ -676,15 +678,31 @@ def run_server():
         interval_hours = float(os.getenv("SCAN_INTERVAL_HOURS", "12"))
     except ValueError as exc:
         raise SystemExit("SCAN_INTERVAL_HOURS precisa ser um número positivo") from exc
-    if interval_hours <= 0:
+    if not math.isfinite(interval_hours) or interval_hours <= 0:
         raise SystemExit("SCAN_INTERVAL_HOURS precisa ser maior que zero")
+    host = os.getenv("HOST", "0.0.0.0")
+    server = ThreadingHTTPServer((host, port), Handler)
+    previous_sigterm = None
+
+    def terminate(_signal, _frame):
+        STOP_SCHEDULER.set()
+        # shutdown() must run outside the serve_forever thread.
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+    if threading.current_thread() is threading.main_thread():
+        previous_sigterm = signal.signal(signal.SIGTERM, terminate)
     scheduler = threading.Thread(target=scheduled_scans, args=(interval_hours,), daemon=True)
     scheduler.start()
-    print(f"RockShowBot ouvindo em 0.0.0.0:{port}; buscas automáticas a cada {interval_hours:g}h")
+    print(f"RockShowBot ouvindo em {host}:{port}; buscas automáticas a cada {interval_hours:g}h")
     try:
-        ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+        server.serve_forever()
     except KeyboardInterrupt:
+        pass
+    finally:
         STOP_SCHEDULER.set()
+        server.server_close()
+        if previous_sigterm is not None:
+            signal.signal(signal.SIGTERM, previous_sigterm)
 
 
 if __name__ == "__main__":

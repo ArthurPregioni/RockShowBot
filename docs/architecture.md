@@ -26,6 +26,7 @@ scripts/                   utilitários de empacotamento, diagnóstico e revisã
 public/                    favicon e protocolos publicados das tarefas
 drizzle/                   migrações D1 e metadados versionados
 deploy/python/             Dockerfile e Compose do servidor Python
+deploy/termux/             preset Android, serviço, configuração e backup
 docs/                      guias de uso, hospedagem e contribuição
 tests/                     web, navegador, integração e Python
 tooling/sites/             infraestrutura de build, preview e publicação

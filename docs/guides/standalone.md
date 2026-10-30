@@ -147,6 +147,10 @@ Ratos de Porão
 
 Artistas repetidos são ignorados. O exemplo `docs/examples/artistas-exemplo.csv` pode ser usado para experimentar a importação.
 
+## Android com Termux
+
+O [guia Termux](termux.md) instala este servidor nativamente no Android, com supervisão, boot, dados persistentes e backup. O preset usa `HOST=127.0.0.1` e `PORT=8765`. Em Docker/Render, o padrão continua `HOST=0.0.0.0` para receber o encaminhamento da hospedagem.
+
 ## Hospedar no Render
 
 O repositório inclui `deploy/python/Dockerfile` e `render.yaml` para criar um serviço web em Frankfurt, com disco persistente para o SQLite. O blueprint pede que você defina a senha administrativa ao criá-lo.

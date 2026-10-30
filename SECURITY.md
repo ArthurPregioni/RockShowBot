@@ -10,6 +10,10 @@ Informe a versão/commit, a aplicação afetada, o impacto e passos de reproduç
 - O servidor Python tem login administrativo por HTTP Basic. Na internet, use HTTPS no proxy ou na hospedagem, senha forte e armazenamento persistente protegido. Ele também tem um único radar por instalação.
 - A extensão só deve enviar a lista de artistas para a instalação escolhida pelo usuário. A autenticação no streaming ocorre no próprio provedor. Credenciais de contas, cookies de streaming e endpoints privados não fazem parte do importador.
 
+## Instalação Termux
+
+O preset Android mantém configuração e banco no armazenamento privado do Termux e escuta em loopback por padrão. Backups contêm dados pessoais do banco, mas não incluem o arquivo de credenciais. Os comandos operam apenas no serviço RockShowBot e não liberam o wake lock global ao parar, para respeitar outros serviços do aparelho. A preparação não replica a autenticação ou os recursos do painel Sites.
+
 ## Arquivos privados
 
 Guarde valores reais em `.env`, `.dev.vars` ou nos segredos da hospedagem. O `.gitignore` exclui esses arquivos, bancos, chaves privadas e a identidade local do Site. Os exemplos versionados têm somente nomes de variáveis e valores fictícios. Não inclua exports do banco ou logs de sessões em issues e pull requests.

@@ -11,7 +11,7 @@ O repositório contém duas aplicações com recursos diferentes:
 | Recurso | Painel web no Sites | Servidor Python independente |
 | --- | --- | --- |
 | Interface | React/Vinext | HTML servido pelo Python |
-| Hospedagem | Sites com acesso privado | Docker/VPS ou Render com disco persistente |
+| Hospedagem | Sites com acesso privado | Docker/VPS, Render ou Android/Termux |
 | Banco | D1 da própria instalação | SQLite em volume persistente |
 | Autenticação | Conta do proprietário no Sites | Usuário e senha administrativa |
 | Artistas Apple Music/Spotify | Extensão pelo navegador ou APIs opcionais | APIs oficiais com credenciais próprias |
@@ -22,6 +22,15 @@ O repositório contém duas aplicações com recursos diferentes:
 | Consolidação e recibos de alertas | Eventos equivalentes e histórico de envios | Deduplicação básica por evento |
 
 **Para rodar em infraestrutura própria, comece pelo [guia Python/Docker](docs/guides/standalone.md).** Para ter o painel com extensão e catálogo ampliado, siga o [guia Sites](docs/guides/sites.md). Um fork não herda a hospedagem, o Gmail nem as tarefas de outra pessoa. Cada instância tem um radar pessoal; não há cadastro de usuários com dados isolados.
+
+## Preparação para Android/Termux
+
+Há um [preset Termux](docs/guides/termux.md) com serviço supervisionado, boot, configuração privada, banco persistente, logs e backup. Ele usa o backend Python. O guia registra os recursos do painel Sites que ainda precisam ser portados antes da migração completa.
+
+```sh
+# Dentro do checkout no Termux, após instalar python e termux-services:
+python deploy/termux/manage.py install
+```
 
 ## Começar com Python ou Docker
 

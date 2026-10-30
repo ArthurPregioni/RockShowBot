@@ -3,6 +3,7 @@
 ## Instalar e usar
 
 - [Servidor Python: instalação, SMTP, Docker, Compose e Render](guides/standalone.md)
+- [Android/Termux: preparação, operação e plano de migração](guides/termux.md)
 - [Painel web: hospedagem Sites e tarefas em nuvem](guides/sites.md)
 - [Usar o painel](guides/using.md)
 - [Apple Music, Spotify e outros serviços de música](guides/music-services.md)
