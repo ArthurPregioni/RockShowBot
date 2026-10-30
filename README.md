@@ -18,7 +18,7 @@
 
 ### Fontes de shows e antecipações
 
-O catálogo aberto em [`public/radar-sources.json`](public/radar-sources.json) reúne **22 fontes oficiais**, além de **José Norberto Flesch** como fonte jornalística separada:
+O catálogo aberto em [`src/lib/radar-catalog.json`](src/lib/radar-catalog.json), publicado pelo endpoint `/radar-sources.json`, reúne **22 fontes oficiais**, além de **José Norberto Flesch** como fonte jornalística separada:
 
 | País | Fontes oficiais |
 | --- | --- |

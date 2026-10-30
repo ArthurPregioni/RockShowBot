@@ -1,4 +1,4 @@
-import catalog from "../../public/radar-sources.json" with { type: "json" };
+import catalog from "./radar-catalog.json" with { type: "json" };
 
 export type RadarSource = {id:string;name:string;kind:string;countries:string[];url:string;feed?:string;profiles?:string[]};
 export const OFFICIAL_SOURCES: RadarSource[] = catalog.official;
