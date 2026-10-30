@@ -149,6 +149,8 @@ O tutorial de instalação, Docker/Render, SMTP e integração pelas APIs fica e
 npm run check:types
 npm run test:web
 npm run test:python
+# Com npm run dev em outro terminal, somente localhost, sem enviar e-mails:
+npm run test:delivery-flow
 # Instalar o navegador de QA uma vez: npx playwright install chromium
 npm run test:browser
 node --test tests/selfhosted/apple_music_browser.test.cjs

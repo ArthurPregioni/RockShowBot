@@ -17,7 +17,8 @@
     "test:python": "python3 -m unittest discover -s tests/selfhosted -v",
     "check:types": "tsc --noEmit",
     "test:browser": "node --test tests/browser/*.test.mjs",
-    "sources:check": "node --experimental-strip-types scripts/check-radar-sources.mjs"
+    "sources:check": "node --experimental-strip-types scripts/check-radar-sources.mjs",
+    "test:delivery-flow": "node tests/integration/alert-deliveries.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
