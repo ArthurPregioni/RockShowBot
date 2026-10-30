@@ -4,7 +4,7 @@ declare module "virtual:sites-connector-preview" {
 }
 
 // Only the local preview uses an environment binding. Hosted Sites receive the
-// request-scoped capability through ctx.props.CONNECTORS in sites-worker.ts.
+// request-scoped capability through ctx.props.CONNECTORS in src/worker/index.ts.
 declare namespace Cloudflare {
   interface Env {
     CONNECTORS?: import("./connector-contract.mjs").ConnectorBinding;

@@ -51,7 +51,7 @@
     } finally {
       token = undefined;
       if (music) {
-        try { await music.unauthorize(); } catch (_) { /* No token is retained by this app. */ }
+        try { await music.unauthorize(); } catch { /* No token is retained by this app. */ }
       }
     }
     if (ready) window.location.assign("/apple-music/artists");

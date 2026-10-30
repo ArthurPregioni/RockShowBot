@@ -51,7 +51,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
     if (request.method !== "POST") throw new UserError("Método inválido.", 405);
     const rawBody = await request.text();
     if (rawBody.length > 1000000) throw new UserError("Requisição muito grande.", 413);
-    let body:any;
+    let body:Record<string,unknown>;
     try { body = rawBody ? JSON.parse(rawBody) : {}; } catch { throw new UserError("Formato de requisição inválido."); }
     if (!body || typeof body!=="object" || Array.isArray(body)) throw new UserError("Formato de requisição inválido.");
     if (action.startsWith("music/")) return await musicAction(request,action,body,user!.userId,originFor(request));
@@ -99,6 +99,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
       if (claim.meta.changes !== 1) throw new UserError("Essa autorização já está sendo utilizada.");
       try {
         const token = appleConfiguration(env.APPLE_MUSIC_DEVELOPER_TOKEN,originFor(request));
+        if(typeof body.userToken !== "string")throw new UserError("Autorização Apple Music inválida.");
         const candidates = await appleLibrary(body.userToken,token,originFor(request));
         await database().prepare("UPDATE music_imports SET phase='artists_ready',candidates=?,expires=? WHERE id=?").bind(JSON.stringify(candidates),Date.now()+600000,session.id).run();
         return json({candidates});

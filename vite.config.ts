@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 import { existsSync, readFileSync } from "node:fs";
 import { readExecutionProfile } from "./tooling/sites/execution-profile.mjs";
 import { configureToolEnvironment } from "./tooling/sites/tool-environment.mjs";
-import { sites } from "./tooling/sites/vite/sites-vite-plugin";
+import { sites } from "./tooling/sites/vite/sites-vite-plugin.ts";
 import { connectorPreview } from "./tooling/sites/vite/connector-preview-plugin.mjs";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =

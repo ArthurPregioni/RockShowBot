@@ -5,6 +5,10 @@
     "**/.sites-runtime": true,
     "**/.vinext": true,
     "**/.cache": true,
+    "**/.extension-build": true,
+    "**/.next": true,
+    "**/.local": true,
+    "**/*.db": true,
     "**/dist": true,
     "**/__pycache__": true,
     "**/*.tsbuildinfo": true

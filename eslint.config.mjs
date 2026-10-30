@@ -14,6 +14,15 @@ const eslintConfig = defineConfig([
     "work/**",
   ]),
 
+  {
+    files: ["**/*.cjs"],
+    rules: {"@typescript-eslint/no-require-imports": "off"},
+  },
+  {
+    // This script is served by the Python application, without a Next router.
+    files: ["selfhosted/static/*.js"],
+    rules: {"@next/next/no-location-assign-relative-destination": "off"},
+  },
 ]);
 
 export default eslintConfig;

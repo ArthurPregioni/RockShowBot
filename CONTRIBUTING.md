@@ -29,6 +29,7 @@ Use ID estável, países ISO e HTTPS no catálogo. Teste coletores com HTML/JSON
 
 ```sh
 npm test
+npm run lint -- --max-warnings=0
 npm run check:types
 npm run check:repo
 npm run build
@@ -36,6 +37,8 @@ npm audit
 ```
 
 Para mudanças na extensão, instale Chromium com `npx playwright install chromium` e rode `npm run test:browser` e `npm run extension:build`. Para mudanças de persistência/envio, rode `npm run test:delivery-flow` com `npm run dev` em outro terminal. Esse teste aceita somente um preview local e não envia mensagens.
+
+Para mudanças de hospedagem Python, construa a imagem com `docker build -f deploy/python/Dockerfile -t rockshowbot-local-qa .` e execute `python3 tests/integration/standalone-docker.py`. O teste usa senha aleatória, contêiner e volume próprios, verifica login e persistência e remove apenas os recursos que criou. Não envia e-mails.
 
 Se alterar o esquema, gere uma nova migração com `npm run db:generate`; nunca reescreva SQL já aplicado. Atualize o guia correspondente sempre que mudar um comando, variável ou recurso disponível.
 

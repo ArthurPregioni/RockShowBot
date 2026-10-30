@@ -1,0 +1,20 @@
+name: Reportar um problema
+description: Falha na instalação, coleta, importação ou interface.
+body:
+  - type: markdown
+    attributes:
+      value: Para vulnerabilidades, siga SECURITY.md. Remova credenciais e dados pessoais dos relatos.
+  - type: dropdown
+    id: application
+    attributes:
+      label: Aplicação
+      options: [Painel Sites, Servidor Python, Extensão, Documentação]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Como reproduzir
+      description: Informe versão/commit, ambiente, passos, resultado esperado e resultado observado.
+    validations:
+      required: true

@@ -1,0 +1,71 @@
+name: QA
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: qa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12', '3.14']
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r scripts/requirements-token.txt
+      - run: python -m unittest discover -s tests/selfhosted -v
+      - name: Verify independent Docker hosting
+        if: matrix.python-version == '3.12'
+        run: |
+          docker build -f deploy/python/Dockerfile -t rockshowbot-local-qa .
+          python tests/integration/standalone-docker.py
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: python3 scripts/check-public-repo.py --history
+      - run: npm run test:web
+      - run: node --test tests/selfhosted/apple_music_browser.test.cjs
+      - run: npm run lint -- --max-warnings=0
+      - run: npm run check:types
+      - run: npm audit --audit-level=high
+      - run: cp .dev.vars.example .dev.vars
+      - run: npm run build
+      - run: npm run db:migrate:local
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - name: Verify delivery flow with a local database and no email
+        run: |
+          npm run dev > /tmp/rockshowbot-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          node --input-type=module -e '
+            const until = Date.now() + 90000;
+            while (true) {
+              try {
+                const r = await fetch("http://localhost:5173/signin-with-chatgpt?return_to=/");
+                if (r.ok) break;
+              } catch {}
+              if (Date.now() > until) throw new Error("Local preview did not become ready");
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          '
+          npm run test:delivery-flow

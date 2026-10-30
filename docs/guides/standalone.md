@@ -1,6 +1,6 @@
 # Servidor Python independente
 
-Execute os comandos desta página a partir da raiz do repositório. O código desta versão fica em `selfhosted/`; execute-o como módulo Python. A extensão de navegador usa o painel web React/Vinext. Ela não é compatível com esta interface Python; veja a [comparação das versões](../../README.md).
+Execute os comandos desta página a partir da raiz do repositório. O código desta versão fica em `selfhosted/`; execute-o como módulo Python. O comando antigo `python3 rockshowbot.py` foi substituído por `python3 -m selfhosted.rockshowbot`. A extensão de navegador usa o painel web React/Vinext. Ela não é compatível com esta interface Python; veja a [comparação das versões](../../README.md).
 
 - Apple Music: importação opcional pela API MusicKit; requer credencial do aplicativo e autorização da conta. Testes automatizados usam respostas controladas; não validam consentimento real.
 - Spotify como integração alternativa, com seleção de artistas seguidos.

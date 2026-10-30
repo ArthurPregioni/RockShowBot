@@ -7,7 +7,7 @@ import {chromium} from 'playwright';
 let browser;
 const fixture=await readFile(new URL('../fixtures/apple-library-artists.html',import.meta.url),'utf8');
 const source=fileURLToPath(new URL('../../extensions/browser/collector.js',import.meta.url));
-const appleURL='https://music.apple.com/br/library/artists/r.k23lvvs';
+const appleURL='https://music.apple.com/br/library/artists/r.demoartist';
 before(async()=>{browser=await chromium.launch({headless:true,args:['--disable-gpu'],...(process.env.ROCKSHOWBOT_CHROMIUM?{executablePath:process.env.ROCKSHOWBOT_CHROMIUM}:{})});});
 after(async()=>{await browser?.close();});
 async function open(html=fixture,url=appleURL){
@@ -22,7 +22,7 @@ test('Apple selected-artist URL reads name-only options and excludes the adjacen
  }finally{await page.close();}
 });
 test('Apple never mistakes a detail pane for the artist library if the list is missing',async()=>{
- const page=await open('<main><div data-testid="artist-detail-container"><a href="/br/artist/a-ha/166566">a-ha</a><a href="/br/library/artists/r.k23lvvs">Hunting High and Low (Deluxe Edition)</a></div></main>');
+ const page=await open('<main><div data-testid="artist-detail-container"><a href="/br/artist/a-ha/166566">a-ha</a><a href="/br/library/artists/r.demoartist">Hunting High and Low (Deluxe Edition)</a></div></main>');
  try{await assert.rejects(()=>page.evaluate(()=>RockShowBotCollector.readArtists(document,location)),/localizar a lista/);}finally{await page.close();}
 });
 test('Apple reads all asynchronously rendered virtual rows and restores the list scroll',async()=>{

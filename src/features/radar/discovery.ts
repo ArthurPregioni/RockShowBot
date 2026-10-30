@@ -1,7 +1,8 @@
 import {normalize,upcomingDate,COUNTRY_NAMES,type ShowEvent} from "../../core/bot.ts";
 import {officialURL,sourcesForCountries,type RadarSource} from "./sources.ts";
 
-const array = (value:any):any[] => value==null?[]:Array.isArray(value)?value:[value];
+const array = <T,>(value:T|T[]|null|undefined):T[] => value==null?[]:Array.isArray(value)?value:[value];
+const record = (value:unknown):Record<string,unknown> => value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
 function text(value:string) {
   return value.replace(/<[^>]*>/g," ").replace(/&(?:amp|quot|apos|lt|gt|#(\d+)|#x([\da-f]+));/gi,(match,decimal,hex)=>{
     if(decimal||hex){const code=parseInt(decimal||hex,decimal?10:16);return code<=0x10ffff?String.fromCodePoint(code):"";}
@@ -9,18 +10,19 @@ function text(value:string) {
   }).replace(/\s+/g," ").trim();
 }
 function matches(value:string,artist:string) {return (` ${normalize(value)} `).includes(` ${normalize(artist)} `);}
-function countryCode(value:any) {
-  const name=typeof value==="string"?value:value?.name||value?.identifier||"";
+function countryCode(value:unknown) {
+  const name=String(typeof value==="string"?value:record(value).name||record(value).identifier||"");
   const aliases:Record<string,string>={brazil:"BR",bolivia:"BO",colombia:"CO",ecuador:"EC",peru:"PE",paraguay:"PY",uruguay:"UY",venezuela:"VE",guyana:"GY",suriname:"SR"};
   return /^[A-Z]{2}$/.test(name)?name:aliases[normalize(name)]||Object.entries(COUNTRY_NAMES).find(([,label])=>normalize(label)===normalize(name))?.[0]||"";
 }
 export type SourcePage = {events:ShowEvent[];candidates:{artist:string;url:string;title:string}[]};
 export function officialPage(html:string,pageURL:string,source:RadarSource,artists:string[],countries:string[],today?:string):SourcePage {
   const events:ShowEvent[]=[],candidates:SourcePage["candidates"]=[];
-  const objects:any[]=[];
-  function walk(value:any,depth=0) {
-    if(!value||typeof value!=="object"||depth>16||objects.length>=1000)return;
-    if(Array.isArray(value)){value.forEach(item=>walk(item,depth+1));return;}
+  const objects:Record<string,unknown>[]=[];
+  function walk(input:unknown,depth=0) {
+    if(!input||typeof input!=="object"||depth>16||objects.length>=1000)return;
+    const value=record(input);
+    if(Array.isArray(input)){input.forEach(item=>walk(item,depth+1));return;}
     if(array(value["@type"]).some(type=>/^(?:https?:\/\/schema.org\/)?(?:MusicEvent|Event|Festival)$/.test(String(type))))objects.push(value);
     for(const nested of Object.values(value))if(typeof nested==="object")walk(nested,depth+1);
   }
@@ -29,20 +31,20 @@ export function officialPage(html:string,pageURL:string,source:RadarSource,artis
   }
   for(const event of objects) {
     if(typeof event.name!=="string"||typeof event.startDate!=="string"||!upcomingDate(event.startDate,today))continue;
-    if(event.eventStatus&&!/\/(EventScheduled|EventRescheduled)$/.test(event.eventStatus)&&!["EventScheduled","EventRescheduled"].includes(event.eventStatus))continue;
+    if(event.eventStatus&&!/\/(EventScheduled|EventRescheduled)$/.test(String(event.eventStatus))&&!["EventScheduled","EventRescheduled"].includes(String(event.eventStatus)))continue;
     if(String(event.eventAttendanceMode||"").includes("OnlineEventAttendanceMode"))continue;
     // Festival ranges do not establish the artist's performance date.
     if(event.endDate&&String(event.endDate).slice(0,10)!==event.startDate.slice(0,10))continue;
-    const places=array(event.location).filter(place=>place?.address);
+    const places=array(event.location).map(record).filter(place=>place.address);
     for(const place of places) {
-      const country=countryCode(place.address.addressCountry);
+      const country=countryCode(record(place.address).addressCountry);
       if(!countries.includes(country)||!source.countries.includes(country))continue;
-      const url=officialURL(event.url||event["@id"]||pageURL,pageURL);
+      const url=officialURL(String(event.url||event["@id"]||pageURL),pageURL);
       if(!url)continue;
-      const performers=array(event.performer||event.performers).map(item=>typeof item==="string"?item:item?.name||"");
+      const performers=array(event.performer||event.performers).map(item=>typeof item==="string"?item:String(record(item).name||""));
       for(const artist of artists) {
         if(performers.length?!performers.some(name=>normalize(name)===normalize(artist)):!(normalize(event.name)===normalize(artist)||normalize(event.name).startsWith(normalize(artist)+" ")))continue;
-        events.push({artist,title:text(event.name),country,city:typeof place.address.addressLocality==="string"?place.address.addressLocality:"",startsAt:event.startDate.slice(0,10),url,source:source.name,status:"listed"});
+        events.push({artist,title:text(event.name),country,city:String(record(place.address).addressLocality||""),startsAt:event.startDate.slice(0,10),url,source:source.name,status:"listed"});
       }
     }
   }
@@ -75,12 +77,14 @@ export function fleschPublicPage(html:string,artists:string[],countries:string[]
   const script=html.match(/(?:var\s+)?ytInitialData\s*=\s*(\{[^\n]*?\});?\s*<\/script>/)?.[1];
   if(!script)return [];
   const entries:string[]=[];let visited=0;
-  function walk(value:any,depth=0) {
-    if(!value||typeof value!=="object"||depth>25||visited++>20000)return;
-    if(Array.isArray(value)){value.forEach(item=>walk(item,depth+1));return;}
+  function walk(input:unknown,depth=0) {
+    if(!input||typeof input!=="object"||depth>25||visited++>20000)return;
+    const value=record(input);
+    if(Array.isArray(input)){input.forEach(item=>walk(item,depth+1));return;}
     const id=value.videoId||((value.contentType==="LOCKUP_CONTENT_TYPE_VIDEO")?value.contentId:"");
-    const title=value.title?.runs?.map((run:any)=>run.text||"").join("")||value.title?.simpleText||value.metadata?.lockupMetadataViewModel?.title?.content;
-    const age=normalize(value.publishedTimeText?.simpleText||JSON.stringify(value.metadata?.lockupMetadataViewModel?.metadata||""));
+    const titleData=record(value.title),metadata=record(record(value.metadata).lockupMetadataViewModel);
+    const title=array(titleData.runs).map(run=>String(record(run).text||"")).join("")||titleData.simpleText||record(metadata.title).content;
+    const age=normalize(String(record(value.publishedTimeText).simpleText||JSON.stringify(metadata.metadata||"")));
     const stale=/(?:[1-9]\d* )?(?:years? ago|anos? atras)/.test(age)||/(?:[4-9]|\d{2,}) (?:months? ago|meses? atras)/.test(age)||/ha (?:[1-9]\d* )?anos?/.test(age)||/ha (?:[4-9]|\d{2,}) meses?/.test(age);
     if(!stale&&typeof id==="string"&&/^[\w-]{11}$/.test(id)&&typeof title==="string")entries.push(`<entry><title>${title.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</title><yt:videoId>${id}</yt:videoId></entry>`);
     for(const nested of Object.values(value))if(typeof nested==="object")walk(nested,depth+1);

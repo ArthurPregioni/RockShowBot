@@ -4,7 +4,7 @@ import { storeEvents, visibleEvents } from "../features/events/store";
 import {database,UserError,siteOrigin} from "./database";
 export {database,UserError,siteOrigin} from "./database";
 import { env } from "cloudflare:workers";
-import { appleConfiguration, discover, digest, normalize, webURL, todayInBrazil, upcomingDate, type ShowEvent } from "../core/bot";
+import { appleConfiguration, discover, normalize, type ShowEvent } from "../core/bot";
 
 export type Settings = { id: number; email: string; notifications: number; countries: string; schedule: string };
 export async function settings(): Promise<Settings> {
@@ -29,7 +29,7 @@ export async function dashboard() {
   return { artists, settings: { ...preferences, countries: JSON.parse(preferences.countries) }, events: shows, lastRun, confirmation,
     apple: appleStatus(), music: musicProviders(appleStatus().ready,env.SPOTIFY_CLIENT_ID), sources: { news: true, ticketmaster: !!env.TICKETMASTER_API_KEY, predicthq: !!env.PREDICTHQ_API_KEY } };
 }
-export async function addArtist(name: string) {
+export async function addArtist(name: unknown) {
   if (typeof name !== "string" || !normalize(name) || name.trim().length > 160) throw new UserError("Informe um nome de artista com até 160 caracteres.");
   const result = await database().prepare("INSERT OR IGNORE INTO watch_artists(id,name,normalized) VALUES(?,?,?)")
     .bind(crypto.randomUUID(), name.trim(), normalize(name)).run();

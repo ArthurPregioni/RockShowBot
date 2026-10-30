@@ -1,6 +1,11 @@
 import { normalize, type Candidate } from "../../core/bot.ts";
 
 type Transport = typeof fetch;
+type MusicPayload = {
+  error?:unknown; data?:unknown[]; next?:string;
+  results?:{wrapperType?:string;artistId?:string|number;artistName?:string}[];
+  artists?:{items?:unknown[];next?:string};
+};
 export type MusicProvider = {id:string;name:string;mode:"oauth"|"public"|"browser"|"unavailable";ready:boolean;oauthReady?:boolean;description:string};
 export function musicProviders(appleReady:boolean, spotifyClientID?:string):MusicProvider[] {
   return [
@@ -21,18 +26,18 @@ export function deezerUserID(value:unknown):string {
   }catch{}
   throw new Error("Use um link como https://www.deezer.com/br/profile/123 ou o ID numérico do perfil. Links de playlists não são aceitos.");
 }
-function candidates(items:any[]):Candidate[] {
+function candidates(items:unknown[]):Candidate[] {
   const found=new Map<string,Candidate>();
-  for(const item of items)if(item?.id&&typeof item.name==="string"&&item.name.trim()&&item.name.length<=160)found.set(normalize(item.name),{id:String(item.id),name:item.name.trim()});
+  for(const value of items){const item=value as {id?:unknown;name?:unknown}|null;if(item?.id&&typeof item.name==="string"&&item.name.trim()&&item.name.length<=160)found.set(normalize(item.name),{id:String(item.id),name:item.name.trim()});}
   return [...found.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
 async function read(url:URL,transport:Transport,headers?:Record<string,string>) {
   const response=await transport(url,{headers,redirect:"manual",signal:AbortSignal.timeout(15000)});
   if(!response.ok)throw new Error(response.status===429?"O serviço limitou as consultas. Aguarde e tente novamente.":"Não foi possível consultar o serviço de música. Tente novamente.");
-  return await response.json() as any;
+  return await response.json() as MusicPayload;
 }
 export async function deezerArtists(profile:unknown,transport:Transport=fetch):Promise<Candidate[]> {
-  const id=deezerUserID(profile),items:any[]=[];
+  const id=deezerUserID(profile),items:unknown[]=[];
   let next:URL|null=new URL(`https://api.deezer.com/user/${id}/artists?limit=100`);
   const seen=new Set<string>();
   while(next){
@@ -50,7 +55,7 @@ export async function catalogArtists(query:unknown,provider:unknown,transport:Tr
     const url=new URL("https://itunes.apple.com/search");url.search=new URLSearchParams({term:query.trim(),entity:"musicArtist",media:"music",country:"BR",limit:"25"}).toString();
     const payload=await read(url,transport);
     if(!Array.isArray(payload.results))throw new Error("O catálogo Apple não respondeu como esperado.");
-    return candidates(payload.results.filter((a:any)=>a.wrapperType==="artist").map((a:any)=>({id:a.artistId,name:a.artistName})));
+    return candidates(payload.results.filter((a)=>a.wrapperType==="artist").map((a)=>({id:a.artistId,name:a.artistName})));
   }
   if(provider!=="deezer")throw new Error("Escolha o catálogo Apple ou Deezer.");
   const url=new URL("https://api.deezer.com/search/artist");url.search=new URLSearchParams({q:query.trim(),limit:"25"}).toString();
@@ -60,7 +65,7 @@ export async function catalogArtists(query:unknown,provider:unknown,transport:Tr
 }
 export async function spotifyArtists(token:string,transport:Transport=fetch):Promise<Candidate[]> {
   let next:URL|null=new URL("https://api.spotify.com/v1/me/following?type=artist&limit=50");
-  const items:any[]=[],seen=new Set<string>();
+  const items:unknown[]=[],seen=new Set<string>();
   while(next){
     if(next.origin!=="https://api.spotify.com"||next.pathname!=="/v1/me/following"||seen.has(next.href)||seen.size>=40)throw new Error("O Spotify retornou paginação inválida ou uma lista grande demais.");
     seen.add(next.href);
@@ -80,7 +85,7 @@ export async function spotifyAuthorization(clientID:string,redirectURI:string,st
 export async function spotifyExchange(clientID:string,redirectURI:string,code:string,verifier:string,transport:Transport=fetch) {
   const response=await transport("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:clientID,grant_type:"authorization_code",code,redirect_uri:redirectURI,code_verifier:verifier}),signal:AbortSignal.timeout(15000),redirect:"manual"});
   if(!response.ok)throw new Error("O Spotify recusou a autorização. Confira o aplicativo, os usuários permitidos e a URL de retorno.");
-  const payload=await response.json() as any;
+  const payload=await response.json() as {access_token?:unknown};
   if(typeof payload.access_token!=="string"||!payload.access_token)throw new Error("O Spotify não retornou uma autorização válida.");
   return payload.access_token as string;
 }

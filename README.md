@@ -68,6 +68,7 @@ Abra <http://localhost:5173/signin-with-chatgpt?return_to=/>. O preview local us
 
 ```sh
 npm test
+npm run lint -- --max-warnings=0
 npm run check:types
 npm run check:repo
 npm audit

@@ -91,6 +91,14 @@ export function newsItems(xml: string, artist: string, country: string): ShowEve
   return results;
 }
 
+type TicketmasterEvent = {
+  name:string; url:string;
+  dates?: {status?: {code?:string}; start?: {localDate?:string;dateTBA?:boolean;dateTBD?:boolean}};
+  _embedded?: {attractions?: {name?:string}[]; venues?: {city?: {name?:string}}[]};
+};
+type TicketmasterResponse = {page?: {totalPages?:number}; _embedded?: {events?:TicketmasterEvent[]}};
+type PredictHQResponse = {next?:string;results?:{title:string;state?:string;start:string;entities?:{name?:string}[]}[]};
+
 export async function discover(artist: string, country: string, keys: { ticketmaster?: string; predicthq?: string }, transport: typeof fetch = fetch) {
   const events: ShowEvent[] = [], warnings: string[] = [];
   const tasks: Promise<void>[] = [];
@@ -109,12 +117,12 @@ export async function discover(artist: string, country: string, keys: { ticketma
       const query = new URLSearchParams({ apikey: keys.ticketmaster!, keyword: artist, countryCode: country, classificationName: "music", startDateTime: today + "T00:00:00Z", includeTBA: "no", includeTBD: "no", size: "200", sort: "date,asc" });
       const response = await transport("https://app.ticketmaster.com/discovery/v2/events.json?" + query, { signal: AbortSignal.timeout(12000) });
       if (!response.ok) throw new Error();
-      const payload = await response.json() as any;
-      if (payload.page?.totalPages > 1) warnings.push(`Ticketmaster retornou uma lista parcial para ${artist} (${country}); a rotina na nuvem deve complementar a agenda.`);
+      const payload = await response.json() as TicketmasterResponse;
+      if ((payload.page?.totalPages || 0) > 1) warnings.push(`Ticketmaster retornou uma lista parcial para ${artist} (${country}); a rotina na nuvem deve complementar a agenda.`);
       for (const event of payload._embedded?.events || []) {
-        if (["cancelled", "canceled", "postponed"].includes(event.dates?.status?.code) || event.dates?.start?.dateTBA || event.dates?.start?.dateTBD || !upcomingDate(event.dates?.start?.localDate,today)) continue;
+        if (["cancelled", "canceled", "postponed"].includes(event.dates?.status?.code || "") || event.dates?.start?.dateTBA || event.dates?.start?.dateTBD || !upcomingDate(event.dates?.start?.localDate,today)) continue;
         const attractions = event._embedded?.attractions || [];
-        if (attractions.length ? !attractions.some((item: any) => normalize(item.name || "") === normalize(artist)) : !(` ${normalize(event.name || "")} `).includes(` ${normalize(artist)} `)) continue;
+        if (attractions.length ? !attractions.some((item) => normalize(item.name || "") === normalize(artist)) : !(` ${normalize(event.name || "")} `).includes(` ${normalize(artist)} `)) continue;
         const venue = event._embedded?.venues?.[0] || {};
         events.push({ artist, title: event.name, country, city: venue.city?.name || "", startsAt: event.dates?.start?.localDate || "", url: event.url, source: "Ticketmaster", status: "listed" });
       }
@@ -125,11 +133,11 @@ export async function discover(artist: string, country: string, keys: { ticketma
       const query = new URLSearchParams({ q: artist, category: "concerts,festivals", country, "start.gte": today, state: "active", limit: "50", sort: "start" });
       const response = await transport("https://api.predicthq.com/v1/events/?" + query, { headers: { Authorization: "Bearer " + keys.predicthq }, signal: AbortSignal.timeout(12000) });
       if (!response.ok) throw new Error();
-      const payload = await response.json() as any;
+      const payload = await response.json() as PredictHQResponse;
       if (payload.next) warnings.push(`PredictHQ retornou uma lista parcial para ${artist} (${country}); a rotina na nuvem deve complementar a agenda.`);
       for (const event of payload.results || []) {
         if ((event.state && event.state !== "active") || !upcomingDate(event.start,today)) continue;
-        if (!(` ${normalize(event.title || "")} `).includes(` ${normalize(artist)} `) && !(event.entities || []).some((e: any) => normalize(e.name || "") === normalize(artist))) continue;
+        if (!(` ${normalize(event.title || "")} `).includes(` ${normalize(artist)} `) && !(event.entities || []).some((e) => normalize(e.name || "") === normalize(artist))) continue;
         events.push({ artist, title: event.title, country, city: "", startsAt: (event.start || "").slice(0, 10), url: "https://www.predicthq.com/events", source: "PredictHQ", status: "listed" });
       }
     } catch { warnings.push(`PredictHQ indisponível para ${artist} (${country}).`); }
