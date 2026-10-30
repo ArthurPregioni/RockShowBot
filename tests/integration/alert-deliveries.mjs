@@ -12,12 +12,12 @@ try{
  // A country unused by the local development fixtures isolates this flow without deleting user data.
  await post('settings',{email:'qa-alerts@example.test',notifications:true,countries:['SR']});
  for(const band of [name,name+' Cohead',name+' Later'])await post('artists',{name:band});
- const tip={artist:name,title:'Possível turnê',country:'SR',city:'',startsAt:'',url:'https://www.youtube.com/watch?v=abcdefghijk',source:'José Norberto Flesch',status:'unverified'};
+ const tip={artist:name,title:'Possível turnê',country:'SR',city:'',startsAt:'',url:'https://www.youtube.com/watch?v=abcdefghijk&qa='+encodeURIComponent(name),source:'José Norberto Flesch',status:'unverified'};
  await post('events',{events:[tip]});let delivery=(await post('automation/alerts/prepare',{})).delivery;assert.ok(delivery);assert.equal(delivery.possibilities,1);
  const claims=await Promise.all([client.request.post(base+'/api/automation/alerts/claim',{data:{id:delivery.id}}),client.request.post(base+'/api/automation/alerts/claim',{data:{id:delivery.id}})]);assert.deepEqual(claims.map(r=>r.status()).sort(),[200,409]);
  await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-1'});assert.equal((await post('automation/alerts/prepare',{})).delivery,null);
  assert.equal((await post('events',{events:[{...tip,url:'https://another.example/article'}]})).added,0);assert.equal((await post('automation/alerts/prepare',{})).delivery,null);
- const show={artist:name,title:'Synthetic QA show',country:'SR',city:'Paramaribo/SR',startsAt:'2099-02-20',url:'https://www.ticketmaster.com.br/event/qa?utm_source=one',source:'QA official fixture',status:'listed'};
+ const show={artist:name,title:'Synthetic QA show',country:'SR',city:'Paramaribo/SR',startsAt:'2099-02-20',url:'https://www.ticketmaster.com.br/event/qa-'+encodeURIComponent(name)+'?utm_source=one',source:'QA official fixture',status:'listed'};
  await post('events',{events:[show]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.concerts,1);assert.equal(delivery.possibilities,0);
  assert.equal((await post('events',{events:[{...show,city:'Paramaribo, Suriname',url:'https://different.example/official',source:'Another QA source'}]})).added,0);
  await post('events',{events:[show,{...show,artist:name+' Cohead'}]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.count,1);assert.match(delivery.body,/Cohead/);

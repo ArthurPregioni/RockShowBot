@@ -14,17 +14,20 @@ export async function reconcileEvents(){
   }
   const groups=new Map<string,StoredEvent[]>();
   for(const event of all){const key=eventIdentity(event);const group=groups.get(key)||[];group.push(event);groups.set(key,group);}
+  const changes:D1PreparedStatement[]=[];
   for(const [key,group] of groups){
     const winner=preferredEvent(group),duplicates=group.filter(e=>e.id!==winner.id);
     const notified=group.some(e=>e.notified&&e.status===winner.status)?1:0;
     if(duplicates.length||winner.identity_key!==key||winner.notified!==notified){
       const statements=duplicates.map(e=>db.prepare("UPDATE show_events SET status='duplicate',identity_key=?,suppress_reason=? WHERE id=?").bind("duplicate:"+e.id,"Duplicata consolidada em "+winner.id,e.id));
       statements.push(db.prepare("UPDATE show_events SET identity_key=?,city=?,notified=MAX(notified,?) WHERE id=?").bind(key,winner.city,notified,winner.id));
-      await db.batch(statements);
+      changes.push(...statements);
     }
   }
+  for(let offset=0;offset<changes.length;offset+=80)await db.batch(changes.slice(offset,offset+80));
   const active=(await db.prepare("SELECT * FROM show_events WHERE status IN ('listed','unverified')").all<StoredEvent>()).results;
-  for(const event of active){const reason=suppressReason(event,active);if(reason)await db.prepare("UPDATE show_events SET status='superseded',suppress_reason=? WHERE id=? AND status='unverified'").bind(reason,event.id).run();}
+  const suppressed=active.flatMap(event=>{const reason=suppressReason(event,active);return reason?[db.prepare("UPDATE show_events SET status='superseded',suppress_reason=? WHERE id=? AND status='unverified'").bind(reason,event.id)]:[];});
+  for(let offset=0;offset<suppressed.length;offset+=80)await db.batch(suppressed.slice(offset,offset+80));
 }
 export async function visibleEvents(countries:string[],limit=300){
   await reconcileEvents();
