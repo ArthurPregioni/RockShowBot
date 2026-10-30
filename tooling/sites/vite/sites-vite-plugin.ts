@@ -174,7 +174,12 @@ export function sites({ mockAuth = true } = {}): Plugin {
       if (command !== "build") return;
 
       const outputDirectory = resolve(root, "dist", ".openai");
-      const hostingConfig = resolve(root, ".openai", "hosting.json");
+      // RockShowBot customization: clean clones have a generic manifest; an
+      // operator's registered project identity stays outside version control.
+      const personalConfig = resolve(root, ".openai", "hosting.json");
+      const hostingConfig = (await exists(personalConfig))
+        ? personalConfig
+        : resolve(root, ".openai", "hosting.example.json");
       const drizzleSource = resolve(root, "drizzle");
 
       await rm(outputDirectory, { recursive: true, force: true });

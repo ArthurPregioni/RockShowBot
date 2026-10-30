@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {canonicalCity,canonicalURL,eventIdentity,eventRevision,preferredEvent,suppressReason,groupAlerts,renderAlert} from '../../src/lib/events-core.ts';
+import {canonicalCity,canonicalURL,eventIdentity,eventRevision,preferredEvent,suppressReason,groupAlerts,renderAlert} from '../../src/core/events.ts';
 const base={id:'a',artist:'Foo Fighters',title:'Foo Fighters no Brasil',country:'BR',city:'São Paulo',starts_at:'2027-02-20',url:'https://www.ticketmaster.com.br/event/foo',source:'Ticketmaster',status:'listed',notified:0};
 test('Event identity ignores publisher, tracking parameters, accents and city/state formatting, but preserves distinct dates and countries',()=>{
  assert.equal(canonicalCity('São Paulo/SP','BR'),'sao paulo');assert.equal(canonicalCity('Santiago de Chile','CL'),'santiago');assert.equal(canonicalCity('CABA','AR'),'buenos aires');

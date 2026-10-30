@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
-import rockshowbot as bot
+from selfhosted import rockshowbot as bot
 
 
 class FakeSource:

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {OFFICIAL_SOURCES,JOURNALISM_SOURCES,sourcesForCountries,officialURL,isJournalism} from '../../src/lib/radar-sources.ts';
-import {officialPage,collectSource,fleschItems,fleschPublicPage,sourceBatch} from '../../src/lib/official-discovery.ts';
+import {OFFICIAL_SOURCES,JOURNALISM_SOURCES,sourcesForCountries,officialURL,isJournalism} from '../../src/features/radar/sources.ts';
+import {officialPage,collectSource,fleschItems,fleschPublicPage,sourceBatch} from '../../src/features/radar/discovery.ts';
 const source=OFFICIAL_SOURCES.find(s=>s.id==='live-nation-br');
 const url=source.url;
 const event={"@type":"MusicEvent",name:'Sepultura live',startDate:'2030-05-01T20:00:00-03:00',performer:{name:'Sepultura'},location:{name:'Casa',address:{addressCountry:'BR',addressLocality:'São Paulo'}},url:'/show/sepultura',offers:{availability:'https://schema.org/SoldOut'}};

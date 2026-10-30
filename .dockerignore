@@ -1,10 +1,10 @@
-# The Python image only needs the standalone server and compatibility launcher.
+# The Python image only needs the standalone server.
 *
-!rockshowbot.py
 !selfhosted/
 !selfhosted/**
 !deploy/
-!deploy/Dockerfile
+!deploy/python/
+!deploy/python/Dockerfile
 **/__pycache__
 **/*.pyc
 **/.env*

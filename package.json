@@ -1,5 +1,5 @@
 {
-  "name": "site-creator-vinext-starter",
+  "name": "rockshowbot",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -18,61 +18,58 @@
     "check:types": "tsc --noEmit",
     "test:browser": "node --test tests/browser/*.test.mjs",
     "sources:check": "node --experimental-strip-types scripts/check-radar-sources.mjs",
-    "test:delivery-flow": "node tests/integration/alert-deliveries.mjs"
+    "test:delivery-flow": "node tests/integration/alert-deliveries.mjs",
+    "test": "npm run test:web && npm run test:python && node --test tests/selfhosted/apple_music_browser.test.cjs",
+    "check:repo": "python3 scripts/check-public-repo.py",
+    "db:migrate:local": "node --import ./tooling/sites/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply DB --local --config dist/server/wrangler.json --persist-to .wrangler/state",
+    "start:python": "python3 -m selfhosted.rockshowbot"
   },
   "dependencies": {
-    "@base-ui/react": "^1.7.0",
-    "@hookform/resolvers": "^5.7.1",
-    "@shadcn/react": "^0.3.0",
-    "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
-    "cmdk": "^1.1.1",
-    "date-fns": "^4.4.0",
     "drizzle-orm": "0.45.2",
-    "embla-carousel-react": "^8.6.0",
-    "input-otp": "^1.4.2",
     "lucide-react": "^1.31.0",
-    "next": "16.3.4",
-    "next-themes": "^0.4.6",
-    "radix-ui": "^1.6.7",
-    "react": "19.2.6",
-    "react-day-picker": "^10.0.1",
-    "react-dom": "19.2.6",
-    "react-hook-form": "^7.85.0",
-    "react-resizable-panels": "^4.12.2",
-    "recharts": "^3.8.0",
-    "sonner": "^2.0.8",
-    "tailwind-merge": "3.6.0",
-    "vaul": "^1.1.2",
-    "zod": "^3.25.76"
+    "next": "16.4.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@cloudflare/workers-types": "4.20260515.1",
+    "@cloudflare/vite-plugin": "1.66.0",
+    "@cloudflare/workers-types": "5.20261030.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
-    "drizzle-kit": "0.31.10",
+    "@vitejs/plugin-rsc": "0.5.37",
+    "drizzle-kit": "0.31.11",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.3",
     "json-rpc-2.0": "1.7.1",
     "playwright": "1.64.1",
     "raw-body": "3.0.2",
-    "react-server-dom-webpack": "19.2.6",
+    "react-server-dom-webpack": "19.3.1",
     "tailwindcss": "4.2.1",
-    "tw-animate-css": "^1.4.0",
     "typescript": "5.9.3",
-    "vinext": "1.0.0-beta.5",
-    "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "vinext": "1.4.0",
+    "vite": "8.3.5",
+    "wrangler": "4.154.0"
   },
   "type": "module",
   "overrides": {
     "miniflare": {
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
+    },
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.4"
+    },
+    "satori": {
+      "fflate": "0.7.5"
     }
+  },
+  "description": "Radar open source de shows futuros e antecipa\u00e7\u00f5es, com importa\u00e7\u00e3o de artistas e alertas por e-mail.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ArthurPregioni/RockShowBot.git"
   }
 }

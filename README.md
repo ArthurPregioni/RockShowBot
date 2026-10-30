@@ -1,159 +1,107 @@
 # RockShowBot
 
-**Instância pessoal hospedada:** [abrir RockShowBot](https://rockshowbot-arthur.socialyak11.chatgpt.site). O acesso é privado pela conta ChatGPT do proprietário. O painel, banco e buscas agendadas ficam na nuvem; seu computador pode ficar desligado.
+Radar open source de **shows futuros e possíveis shows**, com artistas escolhidos por você e alertas por e-mail. Brasil por padrão, atalho para a América do Sul e outros países configuráveis. Shows confirmados e antecipações ficam separados.
 
-## Usar a versão hospedada
+Licença [MIT](LICENSE): você pode usar, modificar, redistribuir e hospedar sua própria cópia, inclusive comercialmente, mantendo o aviso de licença. Cada instalação usa seu próprio banco e suas próprias credenciais.
 
-1. Abra o link acima e entre com sua conta.
-2. Clique em **Escolher serviço**, no cartão **Conectar serviço de música**. O seletor mostra as opções e a disponibilidade de cada uma:
-   - **Deezer:** abra seu perfil no Deezer, copie o link (ex.: `https://www.deezer.com/br/profile/123`) e use **Importar artistas do perfil**. O perfil e os artistas favoritos precisam estar públicos. A consulta não faz login e não acessa dados privados.
-   - **Buscar artistas no catálogo:** pesquise por nome na Apple ou no Deezer. É uma pesquisa pública, sem acesso à sua conta; serve para montar o radar mesmo usando outro streaming.
-   - **Apple Music:** use **Importar pelo navegador** e a extensão para ler a seção Biblioteca → Artistas da sua conta aberta no site Apple Music. Não requer Apple Developer.
-   - **Spotify:** use **Importar pelo navegador** e a extensão na seção Sua Biblioteca → Artistas do Spotify. Não requer cadastrar aplicativo Spotify para essa leitura.
-   - **YouTube Music:** ainda sem implementação da importação da biblioteca de artistas.
-3. Marque os artistas e clique em **Importar**. Nenhum artista é adicionado antes da sua confirmação; nomes repetidos são ignorados. Repita com outros serviços ou pesquisas para completar o radar.
-4. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para os 12 países da América do Sul.
-5. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. Cada alteração com e-mail preenchido solicita uma confirmação com o resumo dos países e do estado dos alertas, inclusive quando você desativa os alertas. Uma tarefa em nuvem verifica essa fila a cada hora usando o Gmail conectado. A interface distingue confirmação pendente de enviada. Se o Gmail precisar ser reconectado, as mensagens permanecem pendentes; envios ambíguos são verificados antes de qualquer nova tentativa. Os resumos de shows continuam nas rotinas das 9h e 21h.
-6. O radar acompanha **shows que ainda vão acontecer**, mesmo que tenham sido anunciados há meses. O painel ordena pela data do show; eventos passados saem da agenda e dos alertas pendentes. **Buscar agora** consulta as fontes oficiais do catálogo, segue até duas páginas de evento por fonte e lê datas estruturadas (JSON-LD); também consulta notícias e APIs opcionais como complemento. Páginas sem dados estruturados precisam da pesquisa complementar na nuvem. A rotina das 9h e 21h (America/Sao_Paulo) prioriza agendas oficiais de artistas, casas, festivais e bilheterias, sem limitar a busca à data de publicação. Consulte **Shows com data** para ver a agenda e **Possíveis shows** para ver notícias e rumores. O retorno das APIs pode ser parcial; o bot não garante cobertura completa de todos os locais. Uma data de publicação nunca vira data de show.
+## Escolha como hospedar
 
-### Alertas sem repetição
+O repositório contém duas aplicações com recursos diferentes:
 
-O bot consolida o mesmo artista/data/país/cidade mesmo quando outra fonte usa grafia diferente (`São Paulo/SP` e `Sao Paulo`, por exemplo). Uma alteração de título ou fonte não reenvia o show. Datas e países diferentes continuam sendo eventos distintos. Vários artistas acompanhados na mesma página de evento, data e cidade aparecem juntos em uma linha do resumo; o contador usa essas linhas, não o número de bandas.
+| Recurso | Painel web no Sites | Servidor Python independente |
+| --- | --- | --- |
+| Interface | React/Vinext | HTML servido pelo Python |
+| Hospedagem | Sites com acesso privado | Docker/VPS ou Render com disco persistente |
+| Banco | D1 da própria instalação | SQLite em volume persistente |
+| Autenticação | Conta do proprietário no Sites | Usuário e senha administrativa |
+| Artistas Apple Music/Spotify | Extensão pelo navegador ou APIs opcionais | APIs oficiais com credenciais próprias |
+| Outras importações | Deezer público, catálogo Apple/Deezer, cadastro manual | Cadastro manual e CSV |
+| Fontes de shows | 22 fontes oficiais + Flesch + notícias; APIs opcionais | Ticketmaster/PredictHQ e dicas manuais |
+| Agendamento e e-mail | Tarefas externas + Gmail conectado, configurados pelo operador | Agendador no processo + SMTP próprio |
+| Confirmação de preferências por e-mail | Sim, com tarefa configurada | Não implementada |
+| Consolidação e recibos de alertas | Eventos equivalentes e histórico de envios | Deduplicação básica por evento |
 
-Uma antecipação genérica é arquivada quando já existe show futuro confirmado para aquele artista e país. Uma possibilidade com outro ano ou outra data continua separada. Antecipações com publicação comprovadamente anterior a 90 dias são arquivadas; a data de publicação nunca é usada como data de show. O histórico fica no banco, com o motivo do arquivamento. Uma confirmação posterior pode gerar uma nova notificação, identificada como show com data, sem reciclar o rumor anterior.
+**Para rodar em infraestrutura própria, comece pelo [guia Python/Docker](docs/guides/standalone.md).** Para ter o painel com extensão e catálogo ampliado, siga o [guia Sites](docs/guides/sites.md). Um fork não herda a hospedagem, o Gmail nem as tarefas de outra pessoa. Cada instância tem um radar pessoal; não há cadastro de usuários com dados isolados.
 
-A tarefa prepara e reserva um resumo no servidor antes de enviar: assunto, destinatário e conteúdo ficam congelados e recebem um marcador único. O registro `alert_deliveries` guarda o estado do envio e o ID real do Gmail; `alert_receipts` impede repetir a mesma informação. Após uma resposta ambígua, a tarefa precisa conferir a mensagem em Enviados; ela não reenvia por simples expiração de prazo. O endpoint antigo de confirmação apenas por IDs está desativado. Registros antigos já marcados como enviados são preservados como `legacy-notified`, sem inventar ID ou horário histórico do Gmail.
+## Começar com Python ou Docker
 
-### Fontes de shows e antecipações
-
-O catálogo aberto em [`src/lib/radar-catalog.json`](src/lib/radar-catalog.json), publicado pelo endpoint `/radar-sources.json`, reúne **22 fontes oficiais**, além de **José Norberto Flesch** como fonte jornalística separada:
-
-| País | Fontes oficiais |
-| --- | --- |
-| Brasil | Live Nation Brasil, 30e, Move Concerts, Eventim, Ticketmaster, Livepass, Lollapalooza Brasil, Rock in Rio Brasil |
-| Argentina | DF Entertainment, AllAccess, Movistar Arena, Move Concerts |
-| Chile | DG Medios, Bizarro Live Entertainment, PuntoTicket |
-| Colômbia | Páramo Presenta, TuBoleta, Move Concerts |
-| Peru | Teleticket, Move Concerts |
-| Uruguai | RedTickets |
-| Paraguai | Ticketea |
-| Equador | TicketShow |
-| Bolívia | SuperTicket |
-| Venezuela | Ticketmundo |
-
-O painel mostra os links do catálogo e quantas fontes atendem aos países salvos. Os 12 países da América do Sul continuam selecionáveis: Guiana e Suriname ainda não têm provedores fixos no catálogo e dependem da pesquisa das agendas dos artistas e locais. Outros países escolhidos explicitamente também entram nessa pesquisa. Não presumimos cobertura completa por cadastrar uma fonte.
-
-A leitura direta roda em lotes de duas fontes, sem chaves de API, procura eventos JSON-LD nas agendas e segue até duas páginas relevantes por fonte. Só aceita eventos futuros com artista, país e data apoiados pelos dados da página; não converte a data de publicação em data do show nem atribui o intervalo inteiro de um festival a um artista. Eventos esgotados continuam relevantes; cancelados e adiados sem nova data são descartados. Os limites evitam excesso de requisições: a tarefa das 09h/21h recebe o catálogo, os links candidatos e os avisos e complementa a leitura pesquisando cada domínio oficial e a agenda de cada artista, sem janela de publicação.
-
-O feed público do canal de [José Norberto Flesch](https://www.youtube.com/channel/UCOUkIsF8PZaadksaqp_ocHA) é consultado para antecipações com artista e Brasil no título. Se o feed falhar, o coletor tenta os vídeos carregados na página pública do canal, sem login ou endpoints privados. A pesquisa complementar também considera os perfis `@jnflesch`. O feed só contém vídeos públicos recentes; ele não representa todo o histórico, o conteúdo falado ou o acesso contínuo ao X/Instagram. Uma antecipação permanece **não verificada** até existir uma fonte oficial do evento. Google News também permanece complementar e não conta como uma das 22 fontes oficiais.
-
-Algumas páginas exigem JavaScript, limitam requisições ou bloqueiam robôs. Um aviso informa falhas de leitura; uma resposta vazia não significa que não haverá shows. O bot respeita essas restrições, sem cookies de conta ou contorno de bloqueios. O catálogo não indica afiliação com os provedores.
-
-Para customizar sua cópia, edite o catálogo com ID único, URL HTTPS da agenda pública, tipo e países ISO. Os coletores, o painel e o contexto da tarefa usam o mesmo arquivo. Uma fonte com formato diferente pode ganhar um adaptador em `src/lib/official-discovery.ts`, com testes de resposta em `tests/web/official-discovery.test.mjs`. O servidor Python independente ainda usa seus próprios adaptadores Ticketmaster/PredictHQ; o catálogo e a pesquisa em nuvem descritos aqui são da versão Sites.
-
-Diagnóstico real das fontes, sem gravar eventos nem enviar e-mails:
+Requisitos: Python 3.10+ **ou** Docker com Compose. Execute na raiz:
 
 ```sh
-npm run sources:check -- "Sepultura" "Iron Maiden"
+git clone https://github.com/ArthurPregioni/RockShowBot.git
+cd RockShowBot
+cp selfhosted/.env.example .env
 ```
 
-### Apple Music e Spotify: importar pelo navegador
+Edite `.env`: escolha `APP_PASSWORD` com pelo menos 16 caracteres. Para buscas automáticas reais, configure Ticketmaster ou PredictHQ; para receber e-mails, configure SMTP. Sem essas credenciais, a interface, os artistas e as dicas manuais continuam disponíveis.
 
-1. Abra [a página de importação](https://rockshowbot-arthur.socialyak11.chatgpt.site/music/browser-import) no mesmo navegador que usa para ouvir música.
-2. Baixe o pacote **v0.2.0** Firefox ou Chromium nessa página e extraia o ZIP. Se usou a versão 0.1.0, carregue o `manifest.json` do novo pacote; recarregar a pasta antiga mantém o código antigo. A versão aparece na janela da extensão.
-3. **Firefox:** abra `about:debugging#/runtime/this-firefox`, use **Carregar extensão temporária** e selecione o `manifest.json` extraído. A extensão é removida ao reiniciar o Firefox; a lista já importada continua na nuvem. O pacote ainda não foi publicado/assinado em loja.
-4. **Chrome/Chromium/Edge:** abra `chrome://extensions` ou `edge://extensions`, ative **Modo do desenvolvedor** e use **Carregar sem compactação** para selecionar a pasta extraída.
-5. Entre em [Apple Music](https://music.apple.com/br/library/artists) ou [Spotify](https://open.spotify.com/collection/artists). No Apple Music, abra **Biblioteca → Artistas**. No Spotify, expanda **Sua Biblioteca** e selecione **Artistas**.
-6. **Na aba do serviço de música**, clique na extensão RockShowBot. Confira o endereço da sua instalação e clique em **Ler artistas e abrir seleção**. A permissão adicional é solicitada apenas para esse destino.
-7. Aguarde a leitura e a rolagem da lista. O painel abre em outra aba; entre nele se solicitado, selecione os artistas e confirme **Importar**. Só os selecionados entram no radar; nomes repetidos são ignorados.
-
-Quem usa este checkout pode gerar e carregar a extensão diretamente:
+Com Python, carregue as variáveis em Bash e inicie:
 
 ```sh
-npm run extension:build
-# Firefox: selecione .extension-build/firefox/manifest.json
-# Chromium: carregue a pasta .extension-build/chromium/
+set -a
+. ./.env
+set +a
+python3 -m selfhosted.rockshowbot
 ```
 
-A extensão acessa o DOM da aba escolhida mediante `activeTab`. Não lê senha, cookies, armazenamento do provedor, playlists ou endpoints privados. A lista de nomes lida fica temporariamente em `storage.session` da extensão por até dez minutos, vinculada à aba de destino, e é descartada após o recebimento. Ao acionar a leitura, os nomes são enviados ao seu painel autenticado para seleção; os candidatos ficam numa sessão temporária no servidor. O endereço da instalação é a única preferência persistente da extensão. Para hospedar uma cópia, configure `ROCKSHOWBOT_SITE_ORIGIN=https://seu-dominio` nas variáveis de produção da sua instalação e altere o destino na janela da extensão. A cópia usa seu próprio banco e autenticação; nenhuma conta do autor é necessária. Ao registrar outro Site, use o `project_id` dessa nova instalação, sem reutilizar o ID pessoal deste checkout.
-
-**Limites:** a leitura depende da estrutura e do carregamento da interface do serviço. Filtros, listas virtualizadas e mudanças de layout podem limitar os artistas detectados. Se a leitura atingir o limite, o painel informa que a lista pode estar incompleta. Uma tela não reconhecida gera erro, sem inventar artistas. A extensão importa uma fotografia da biblioteca; ela não cria uma conexão OAuth nem sincroniza continuamente. O computador só precisa estar ligado na importação; as buscas e os alertas ficam na nuvem.
-
-**Verificação:** o fluxo completo da extensão instalada no Chromium foi testado com páginas controladas de biblioteca Apple/Spotify, incluindo seleção, gravação, deduplicação e rejeição de playlists. Os testes não representam autorização ou leitura de uma conta real nos provedores.
-
-### Apple Music pela API oficial (opcional)
-
-O fluxo MusicKit continua disponível para instalações com a credencial do aplicativo. A Apple exige uma chave Media Services e participação no Apple Developer Program por quem mantém a aplicação. O token de desenvolvedor vai no segredo `APPLE_MUSIC_DEVELOPER_TOKEN` do Site. A chave privada `.p8` fica na máquina do operador. O utilitário abaixo gera o token para a origem exata da sua instalação; o fluxo de login oficial ainda não foi validado com uma conta real nesta instância.
-
-### Spotify na instância hospedada
-
-Quem mantém a instalação cadastra um aplicativo no [Spotify for Developers](https://developer.spotify.com/dashboard) e configura `SPOTIFY_CLIENT_ID` nas variáveis de produção do Site. Cadastre exatamente este retorno HTTPS:
-
-```text
-https://rockshowbot-arthur.socialyak11.chatgpt.site/api/music/spotify/callback
-```
-
-Depois publique a configuração. O login usa PKCE (sem Client Secret), pede apenas `user-follow-read` e mostra os artistas seguidos para seleção. O modo de desenvolvimento do Spotify exige Premium para o dono do aplicativo e usuários de teste autorizados; confira os [limites atuais](https://developer.spotify.com/documentation/web-api/concepts/quota-modes). O fluxo está implementado e coberto por testes automatizados; login real não foi validado por falta da credencial.
-
-### O que a importação faz
-
-Importações trazem **artistas**, nunca playlists. A extensão lê a interface da biblioteca Apple/Spotify aberta no navegador. Os fluxos oficiais opcionais consultam a conta uma vez após autorização; o Deezer consulta favoritos públicos. Tokens de acesso/refresh não são guardados para sincronização. As sessões de importação duram dez minutos, são vinculadas ao usuário e ao navegador e guardam temporariamente os artistas candidatos. No Spotify, o verificador PKCE fica na sessão apenas até o retorno do login. Não existe sincronização contínua da biblioteca: para atualizar o radar, repita a importação.
-
-A pesquisa no catálogo usa a [API pública da Apple](https://performance-partners.apple.com/search-api) ou o endpoint público de artistas do Deezer. A consulta de favoritos foi verificada diretamente em `https://api.deezer.com/user/2529/artists`; a disponibilidade depende do serviço e da visibilidade do perfil. Não é necessário criar aplicativo Deezer para essa consulta pública. Perfis privados não têm suporte neste fluxo.
-
-Para desenvolvimento do painel: Node >=22.13, `npm ci`, `npm run dev` e login local do Sites. O código Python é uma alternativa separada; configurar `.env` para Python não configura os segredos do Site hospedado. Verificação automatizada do painel: `npx tsc --noEmit` e `node --experimental-strip-types --test tests/web/*.test.mjs`.
-
-### Organização do repositório
-
-```text
-src/
-  app/                 páginas e rotas HTTP
-  lib/                 radar, provedores e preferências
-  db/                  esquema e acesso ao banco
-  worker/              entrada da hospedagem
-  components/, hooks/  componentes da interface
-  vendor/              estilos e licenças do starter
-extensions/browser/    extensão Firefox e Chromium
-selfhosted/            servidor Python independente
-scripts/               utilitários do projeto
-  package-extension.mjs
-  create_apple_token.py
-  check-radar-sources.mjs
-tooling/sites/         infraestrutura de build e preview
-deploy/                Dockerfile da versão Python
-drizzle/               migrações imutáveis do banco
-tests/                 testes web, navegador, fixtures e Python
-docs/                  documentação e exemplos
-public/                arquivos publicados e protocolos das tarefas
-```
-
-`rockshowbot.py` na raiz é apenas um lançador compatível com o comando antigo. Os arquivos de configuração do framework ficam na raiz porque são usados pelas ferramentas de build. Pacotes gerados da extensão ficam em `.extension-build/` e `public/downloads/`, fora do Git. Dados locais (`rockshowbot.db`), credenciais e dependências também ficam fora do versionamento. A pasta `src/components/ui/` contém o código do starter; não é outra aplicação.
-
-### Arquitetura da versão hospedada
-
-O painel React/Vinext e as rotas em `src/app/api/` executam em Cloudflare Workers pelo Sites. As tabelas persistentes D1 são definidas em `src/db/schema.ts`, com migrações versionadas em `drizzle/`. A identidade e o acesso privado são fornecidos pelo Sites, sem senha local. As rotas `/api/automation/*` dependem desse acesso privado; não publique essa versão como site anônimo sem implementar autorização própria para essas rotas.
-
-A tarefa de shows consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ela é complementar à agenda: a tarefa em nuvem procura primeiro shows futuros nas fontes oficiais, mesmo quando o anúncio é antigo. Shows esgotados continuam relevantes; shows cancelados e adiados sem nova data não entram como shows marcados. Ticketmaster e PredictHQ são complementos opcionais. A API oficial Apple requer token de desenvolvedor; a importação pela extensão lê a interface da biblioteca aberta no navegador sem esse token. O envio de alertas depende de Gmail conectado e de a opção de alertas estar salva. A confirmação de preferências usa uma fila separada em `preference_confirmations`, o protocolo `public/preferences-confirmations.txt` e uma tarefa própria a cada hora. Ela não executa buscas de shows. O Gmail precisa estar autenticado para qualquer envio real.
-
-O código Python abaixo permanece disponível como alternativa self-hosted. Ele não precisa estar executando para a instância Sites funcionar.
-
-Aplicação self-hosted que acompanha artistas e manda alertas de eventos por e-mail. Dá para usar sem nenhuma chave de API: cadastre artistas e adicione dicas de shows manualmente. As dicas ficam claramente marcadas como **não verificadas**.
-
-## Servidor Python independente
-
-O tutorial de instalação, Docker/Render, SMTP e integração pelas APIs fica em [selfhosted/README.md](selfhosted/README.md). Essa versão é independente do painel hospedado; não precisa ficar executando no seu computador para a instância na nuvem funcionar.
-
-## Verificações de desenvolvimento
+Ou, com Docker:
 
 ```sh
+docker compose -f deploy/python/compose.yaml up -d --build
+```
+
+Abra <http://127.0.0.1:8000>, entre com `APP_USER`/`APP_PASSWORD`, adicione artistas e salve os países e seu e-mail. O guia detalha [SMTP, provedores e hospedagem com HTTPS](docs/guides/standalone.md). O serviço precisa ficar ligado no servidor para executar as buscas; seu computador pessoal pode ficar desligado.
+
+## Desenvolver o painel web
+
+Requisitos: Node.js 22.13+ e npm. Os comandos usam o lockfile versionado:
+
+```sh
+npm ci
+cp .dev.vars.example .dev.vars
+npm run build
+npm run db:migrate:local
+npm run dev
+```
+
+Abra <http://localhost:5173/signin-with-chatgpt?return_to=/>. O preview local usa uma identidade fictícia; banco e e-mails pessoais não são copiados. O envio automático depende da configuração de tarefas descrita no [guia de hospedagem Sites](docs/guides/sites.md).
+
+```sh
+npm test
 npm run check:types
-npm run test:web
-npm run test:python
-# Com npm run dev em outro terminal, somente localhost, sem enviar e-mails:
-npm run test:delivery-flow
-# Instalar o navegador de QA uma vez: npx playwright install chromium
+npm run check:repo
+npm audit
+# QA de navegador; instale Chromium uma vez:
+npx playwright install chromium
 npm run test:browser
-node --test tests/selfhosted/apple_music_browser.test.cjs
+# Com npm run dev em outro terminal; não envia e-mails:
+npm run test:delivery-flow
 ```
 
-Os testes de consentimento das APIs usam respostas controladas e não validam contas reais nos provedores. O QA da extensão instalada cobre captura de páginas controladas, envio para o painel autenticado, seleção e gravação; não representa uma leitura já realizada da biblioteca pessoal do usuário.
+Os testes de provedores usam respostas controladas e não comprovam login em uma conta real de streaming.
+
+## Onde encontrar cada coisa
+
+```text
+src/                   painel web: páginas, componentes, regras e funcionalidades
+selfhosted/            servidor Python e sua configuração de exemplo
+extensions/browser/    extensão Apple Music e Spotify
+public/                protocolos das tarefas e arquivos públicos do painel
+drizzle/               migrações D1
+deploy/python/         Dockerfile e Compose
+scripts/               utilitários do projeto
+tests/                 QA por aplicação e tipo de teste
+tooling/sites/         infraestrutura da hospedagem Sites
+docs/                  guias de uso, instalação e arquitetura
+```
+
+Os arquivos na raiz são configurações das ferramentas e documentação de entrada. A [arquitetura](docs/architecture.md) explica as divisões internas. Não edite `dist/`, `.extension-build/`, dependências ou bancos gerados.
+
+- [Documentação completa](docs/README.md)
+- [Usar o painel e importar artistas](docs/guides/using.md)
+- [Apple Music, Spotify e outros serviços](docs/guides/music-services.md)
+- [Fontes e como ampliar a cobertura](docs/guides/sources.md)
+- [Contribuir e customizar](CONTRIBUTING.md)
+- [Reportar vulnerabilidades](SECURITY.md)
+
+As fontes podem ter cobertura parcial, mudar de formato ou bloquear coleta. Rumores permanecem identificados como não verificados até haver evidência oficial. YouTube Music ainda não tem importação da biblioteca de artistas.

@@ -1,0 +1,16 @@
+services:
+  rockshowbot:
+    build:
+      context: ../..
+      dockerfile: deploy/python/Dockerfile
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      PORT: "10000"
+      DATABASE_PATH: /var/data/rockshowbot.db
+    ports:
+      - "127.0.0.1:8000:10000"
+    volumes:
+      - rockshowbot-data:/var/data
+volumes:
+  rockshowbot-data:

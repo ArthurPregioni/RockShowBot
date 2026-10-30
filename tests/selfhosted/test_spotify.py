@@ -10,7 +10,7 @@ import urllib.parse
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
-import rockshowbot as bot
+from selfhosted import rockshowbot as bot
 from selfhosted import spotify_integration as spotify
 
 

@@ -1,6 +1,6 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
-import hostingConfig from "./.openai/hosting.json";
+import { existsSync, readFileSync } from "node:fs";
 import { readExecutionProfile } from "./tooling/sites/execution-profile.mjs";
 import { configureToolEnvironment } from "./tooling/sites/tool-environment.mjs";
 import { sites } from "./tooling/sites/vite/sites-vite-plugin";
@@ -9,7 +9,12 @@ import { connectorPreview } from "./tooling/sites/vite/connector-preview-plugin.
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
-const { d1, r2 } = hostingConfig;
+// A clone starts with generic bindings. Registration writes an ignored manifest
+// for that operator's Site; no personal deployment ID is shipped in the repo.
+const hostingPath = existsSync(".openai/hosting.json")
+  ? ".openai/hosting.json"
+  : ".openai/hosting.example.json";
+const { d1, r2 } = JSON.parse(readFileSync(hostingPath, "utf8"));
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -22,8 +27,9 @@ const localBindingConfig = {
     ? [
         {
           binding: d1,
-          database_name: "site-creator-d1",
+          database_name: "rockshowbot",
           database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          migrations_dir: "./drizzle",
         },
       ]
     : [],

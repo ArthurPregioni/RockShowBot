@@ -11,7 +11,7 @@ from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
 from selfhosted import apple_music_integration as apple
-import rockshowbot as bot
+from selfhosted import rockshowbot as bot
 
 
 def developer_token(exp=None, origin="https://shows.example"):

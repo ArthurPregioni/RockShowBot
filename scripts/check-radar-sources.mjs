@@ -1,6 +1,6 @@
 // Read-only source diagnostics. Does not change the radar or send messages.
-import {OFFICIAL_SOURCES,JOURNALISM_SOURCES} from '../src/lib/radar-sources.ts';
-import {collectSource} from '../src/lib/official-discovery.ts';
+import {OFFICIAL_SOURCES,JOURNALISM_SOURCES} from '../src/features/radar/sources.ts';
+import {collectSource} from '../src/features/radar/discovery.ts';
 const artists=process.argv.slice(2);
 if(!artists.length)artists.push('Sepultura','Iron Maiden','Metallica');
 const sources=[...OFFICIAL_SOURCES,...JOURNALISM_SOURCES];

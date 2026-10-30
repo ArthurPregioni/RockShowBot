@@ -1,0 +1,11 @@
+# Web panel only. Copy to .dev.vars for local development.
+# In Sites production, set secrets in the hosting environment instead.
+ROCKSHOWBOT_SITE_ORIGIN=http://localhost:5173
+
+# Optional official streaming logins (browser extension needs neither).
+APPLE_MUSIC_DEVELOPER_TOKEN=
+SPOTIFY_CLIENT_ID=
+
+# Optional additional event providers.
+TICKETMASTER_API_KEY=
+PREDICTHQ_API_KEY=

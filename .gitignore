@@ -38,11 +38,21 @@ yarn-error.log*
 # Local environment and keys
 .env*
 .dev.vars*
+!.env.example
+!.dev.vars.example
 *.pem
+*.key
+*.sqlite
+*.sqlite3
+*.db
+*.db-*
 
 # Checkout-local tool state
 /.wrangler/
 /.sites-runtime/
+/.openai/hosting.json
+/.openai/*.local-backup.json
+/.local/
 
 # Workspace scaffolding and publication archives
 /.agents/

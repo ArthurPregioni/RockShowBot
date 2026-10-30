@@ -1,7 +1,7 @@
 const api=globalThis.browser||chrome;
 const field=document.querySelector('#site'),button=document.querySelector('#capture'),status=document.querySelector('#status');
 document.querySelector('#version').textContent='v'+api.runtime.getManifest().version;
-const defaultOrigin='https://rockshowbot-arthur.socialyak11.chatgpt.site';
+const defaultOrigin='';
 api.storage.local.get('siteOrigin').then(value=>{field.value=value.siteOrigin||defaultOrigin;});
 button.addEventListener('click',async()=>{
   status.className='';button.disabled=true;

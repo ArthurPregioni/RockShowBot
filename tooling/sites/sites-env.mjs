@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { configureToolEnvironment } from "./tool-environment.mjs";
 
-export const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+export const projectRoot = fileURLToPath(new URL("../..", import.meta.url));
 configureToolEnvironment(projectRoot);
 
 process.chdir(projectRoot);

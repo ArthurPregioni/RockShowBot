@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {deezerArtists,deezerUserID,catalogArtists,spotifyArtists,spotifyAuthorization,spotifyExchange,musicProviders,browserArtists} from '../../src/lib/music-providers.ts';
+import {deezerArtists,deezerUserID,catalogArtists,spotifyArtists,spotifyAuthorization,spotifyExchange,musicProviders,browserArtists} from '../../src/features/music/providers.ts';
 
 test('Deezer accepts profile IDs, rejects playlists and arbitrary URLs',()=>{
   assert.equal(deezerUserID('https://www.deezer.com/br/profile/2529'),'2529');

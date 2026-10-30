@@ -1,11 +1,11 @@
-import {pendingAlerts,prepareAlert,claimAlert,acknowledgeAlert,alertFailure,alertHistory} from "../../../lib/alert-deliveries";
-import {savePreferences,pendingConfirmations,claimConfirmation,acknowledgeConfirmation,confirmationFailure} from "../../../lib/preference-confirmations";
-import { musicAction } from "../../../lib/music-imports";
-import { sourcesForCountries } from "../../../lib/radar-sources";
+import {pendingAlerts,prepareAlert,claimAlert,acknowledgeAlert,alertFailure,alertHistory} from "../../../features/events/deliveries";
+import {savePreferences,pendingConfirmations,claimConfirmation,acknowledgeConfirmation,confirmationFailure} from "../../../features/preferences/confirmations";
+import { musicAction } from "../../../features/music/imports";
+import { sourcesForCountries } from "../../../features/radar/sources";
 import { env } from "cloudflare:workers";
-import { getChatGPTUser } from "../../chatgpt-auth";
-import { appleConfiguration, appleLibrary, digest, todayInBrazil, type Candidate, type ShowEvent } from "../../../lib/bot-core";
-import { addArtist, dashboard, database, scan, scanOfficialSources, settings, SITE_ORIGIN, saveEvents, UserError, watchlist } from "../../../lib/cloud-bot";
+import { getChatGPTUser } from "../../../server/auth";
+import { appleConfiguration, appleLibrary, digest, todayInBrazil, type Candidate, type ShowEvent } from "../../../core/bot";
+import { addArtist, dashboard, database, scan, scanOfficialSources, settings, siteOrigin, saveEvents, UserError, watchlist } from "../../../server/bot";
 
 export const dynamic = "force-dynamic";
 function json(value: unknown, status = 200, cookie?: string) {
@@ -14,7 +14,7 @@ function json(value: unknown, status = 200, cookie?: string) {
 const cookieName = "rockshowbot_apple";
 function cookie(request: Request) { return request.headers.get("cookie")?.split(";").map(value => value.trim()).find(value => value.startsWith(cookieName + "="))?.slice(cookieName.length + 1) || ""; }
 function cookieHeader(value: string, origin: string, clear = false) { return `${cookieName}=${value}; Path=/api/apple; HttpOnly; SameSite=Strict; Max-Age=${clear ? 0 : 600}${origin.startsWith("https:") ? "; Secure" : ""}`; }
-function originFor(request: Request) { const url = new URL(request.url); return ["localhost","127.0.0.1","::1"].includes(url.hostname) ? url.origin : SITE_ORIGIN; }
+function originFor(request: Request) { const url = new URL(request.url); return ["localhost","127.0.0.1","::1"].includes(url.hostname) ? url.origin : siteOrigin(); }
 type Session = {id:string; owner:string; phase:string; expires:number; candidates:string};
 async function importSession(request: Request, owner: string, phase?: string) {
   const raw = cookie(request);
@@ -44,7 +44,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
       if (action === "automation/context") {
         const preferences = await settings();
         const alerts=await pendingAlerts();
-        return json({ artists: await watchlist(), settings: {...preferences,countries:JSON.parse(preferences.countries)}, sources:sourcesForCountries(JSON.parse(preferences.countries)), pendingAlerts: alerts, searchScope: {concertDateFrom:todayInBrazil(),announcementDateFilter:null,priority:"official upcoming tour dates, venues, festivals and ticket listings; news and rumors are secondary"}, website: SITE_ORIGIN });
+        return json({ artists: await watchlist(), settings: {...preferences,countries:JSON.parse(preferences.countries)}, sources:sourcesForCountries(JSON.parse(preferences.countries)), pendingAlerts: alerts, searchScope: {concertDateFrom:todayInBrazil(),announcementDateFilter:null,priority:"official upcoming tour dates, venues, festivals and ticket listings; news and rumors are secondary"}, website: siteOrigin() });
       }
       throw new UserError("Página não encontrada.", 404);
     }

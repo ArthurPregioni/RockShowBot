@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {SOUTH_AMERICA,parsePreferences,confirmationMessage} from '../../src/lib/preferences-core.ts';
+import {SOUTH_AMERICA,parsePreferences,confirmationMessage} from '../../src/core/preferences.ts';
 
 test('South America preset covers its 12 countries without Central America or Mexico',()=>{
  assert.equal(SOUTH_AMERICA.length,12);
