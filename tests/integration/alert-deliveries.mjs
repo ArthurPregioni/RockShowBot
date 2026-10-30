@@ -28,6 +28,11 @@ try{
  await post('events',{events:[{...show,artist:name+' Later'}]});assert.equal((await post('automation/alerts/prepare',{})).delivery,null);
  await post('events',{events:[{...show,startsAt:'2099-02-21'}]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.concerts,1);assert.match(delivery.body,/21\/02\/2099/);
  await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-3'});
+ // Promotion in place: a dated, already-notified rumor becomes a confirmed date with a resolved city.
+ await post('events',{events:[{...tip,startsAt:'2099-03-01'}]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.possibilities,1);
+ await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-4'});
+ await post('events',{events:[{...show,startsAt:'2099-03-01'}]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.concerts,1);assert.equal(delivery.possibilities,0);
+ await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-5'});
  await post('automation/ack',{ids:['a'.repeat(64)]},409);
  assert.equal((await context()).pendingAlerts.length,0);
  const data=await(await client.request.get(base+'/api/dashboard')).json();assert.ok(!data.events.some(e=>e.artist===name&&e.status==='unverified'));
