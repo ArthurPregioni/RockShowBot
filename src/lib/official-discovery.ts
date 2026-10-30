@@ -63,9 +63,11 @@ export function fleschItems(xml:string,artists:string[],countries:string[]):Show
     const title=text((entry[1].match(/<title>([\s\S]*?)<\/title>/)||[])[1]||"");
     const id=(entry[1].match(/<yt:videoId>([\w-]{11})<\/yt:videoId>/)||[])[1];
     if(!id||!/(?:^| )(?:brasil|brazil)(?: |$)/.test(normalize(title)))continue;
+    const publication=(entry[1].match(/<published>([^<]+)<\/published>/)||[])[1]||"";
+    if(publication&&!Number.isNaN(Date.parse(publication))&&Date.parse(publication)<Date.now()-90*86400000)continue;
     // Titles may simply say "ARTIST NO BRASIL"; no concert keyword is required.
     const subject=normalize(title).split(/\b(?:no|ao|vem ao|volta ao) (?:brasil|brazil)\b/)[0].trim();
-    for(const artist of artists)if(subject===normalize(artist))found.push({artist,title,country:"BR",city:"",startsAt:"",url:"https://www.youtube.com/watch?v="+id,source:"José Norberto Flesch",status:"unverified"});
+    for(const artist of artists)if(subject===normalize(artist))found.push({artist,title,country:"BR",city:"",startsAt:"",url:"https://www.youtube.com/watch?v="+id,source:"José Norberto Flesch",...(publication?{publishedAt:publication}:{}),status:"unverified"});
   }
   return found;
 }
@@ -78,7 +80,9 @@ export function fleschPublicPage(html:string,artists:string[],countries:string[]
     if(Array.isArray(value)){value.forEach(item=>walk(item,depth+1));return;}
     const id=value.videoId||((value.contentType==="LOCKUP_CONTENT_TYPE_VIDEO")?value.contentId:"");
     const title=value.title?.runs?.map((run:any)=>run.text||"").join("")||value.title?.simpleText||value.metadata?.lockupMetadataViewModel?.title?.content;
-    if(typeof id==="string"&&/^[\w-]{11}$/.test(id)&&typeof title==="string")entries.push(`<entry><title>${title.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</title><yt:videoId>${id}</yt:videoId></entry>`);
+    const age=normalize(value.publishedTimeText?.simpleText||JSON.stringify(value.metadata?.lockupMetadataViewModel?.metadata||""));
+    const stale=/(?:[1-9]\d* )?(?:years? ago|anos? atras)/.test(age)||/(?:[4-9]|\d{2,}) (?:months? ago|meses? atras)/.test(age)||/ha (?:[1-9]\d* )?anos?/.test(age)||/ha (?:[4-9]|\d{2,}) meses?/.test(age);
+    if(!stale&&typeof id==="string"&&/^[\w-]{11}$/.test(id)&&typeof title==="string")entries.push(`<entry><title>${title.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</title><yt:videoId>${id}</yt:videoId></entry>`);
     for(const nested of Object.values(value))if(typeof nested==="object")walk(nested,depth+1);
   }
   try{walk(JSON.parse(script));}catch{return [];}

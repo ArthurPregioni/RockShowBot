@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const artists = sqliteTable("watch_artists", {
   id: text("id").primaryKey(),
@@ -26,6 +26,21 @@ export const events = sqliteTable("show_events", {
   status: text("status").notNull().default("unverified"),
   notified: integer("notified").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  identityKey:text("identity_key").notNull().default(""),
+  publishedAt:text("published_at").notNull().default(""),
+  suppressReason:text("suppress_reason").notNull().default(""),
+},table=>[uniqueIndex("events_identity_unique").on(table.identityKey).where(sql`${table.identityKey} <> ''`)]);
+
+export const alertDeliveries=sqliteTable("alert_deliveries",{
+  id:text("id").primaryKey(),recipient:text("recipient").notNull(),batchKey:text("batch_key").notNull().unique(),
+  status:text("status").notNull().default("pending"),subject:text("subject").notNull(),body:text("body").notNull(),snapshot:text("snapshot").notNull(),
+  messageId:text("message_id").notNull().default(""),lastError:text("last_error").notNull().default(""),
+  createdAt:text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),sentAt:text("sent_at"),
+},table=>[uniqueIndex("one_active_alert_delivery").on(table.recipient).where(sql`${table.status} IN ('pending','claimed','unknown')`)]);
+export const alertReceipts=sqliteTable("alert_receipts",{
+  id:text("id").primaryKey(),eventKey:text("event_key").notNull(),revision:text("revision").notNull(),recipient:text("recipient").notNull(),
+  deliveryId:text("delivery_id").notNull().default(""),messageId:text("message_id").notNull().default(""),
+  kind:text("kind").notNull().default("delivery"),createdAt:text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 export const imports = sqliteTable("music_imports", {
   id: text("id").primaryKey(),

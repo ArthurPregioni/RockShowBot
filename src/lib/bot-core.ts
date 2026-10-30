@@ -27,7 +27,7 @@ export const COUNTRY_NAMES: Record<string, string> = {
   US: "Estados Unidos", CA: "Canadá", PT: "Portugal", ES: "Espanha", GB: "Reino Unido", FR: "França", DE: "Alemanha", AU: "Austrália", JP: "Japão",
 };
 export type Candidate = { id: string; name: string };
-export type ShowEvent = { id?: string; artist: string; title: string; country: string; city: string; startsAt: string; url: string; source: string; status: "listed" | "unverified" };
+export type ShowEvent = { id?: string; artist: string; title: string; country: string; city: string; startsAt: string; url: string; source: string; publishedAt?:string; status: "listed" | "unverified" };
 
 export function appleConfiguration(token: string | undefined, origin: string) {
   if (!token) throw new Error("Falta a credencial MusicKit do aplicativo. A vinculação de conta está indisponível.");

@@ -1,3 +1,4 @@
+import {pendingAlerts,prepareAlert,claimAlert,acknowledgeAlert,alertFailure,alertHistory} from "../../../lib/alert-deliveries";
 import {savePreferences,pendingConfirmations,claimConfirmation,acknowledgeConfirmation,confirmationFailure} from "../../../lib/preference-confirmations";
 import { musicAction } from "../../../lib/music-imports";
 import { sourcesForCountries } from "../../../lib/radar-sources";
@@ -37,11 +38,12 @@ async function handle(request: Request, context: {params: Promise<{action:string
     }
     if (request.method === "GET") {
       if (action.startsWith("music/")) return await musicAction(request,action,{},user!.userId,originFor(request));
+      if (action === "automation/alerts/history") return json({deliveries:await alertHistory()});
       if (action === "automation/confirmations") return json({confirmations:await pendingConfirmations()});
       if (action === "dashboard") return json(await dashboard());
       if (action === "automation/context") {
         const preferences = await settings();
-        const alerts = preferences.notifications ? (await database().prepare("SELECT * FROM show_events WHERE notified=0 AND (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN starts_at='' THEN 1 ELSE 0 END, starts_at, created_at LIMIT 100").bind(todayInBrazil(),preferences.countries).all()).results : [];
+        const alerts=await pendingAlerts();
         return json({ artists: await watchlist(), settings: {...preferences,countries:JSON.parse(preferences.countries)}, sources:sourcesForCountries(JSON.parse(preferences.countries)), pendingAlerts: alerts, searchScope: {concertDateFrom:todayInBrazil(),announcementDateFilter:null,priority:"official upcoming tour dates, venues, festivals and ticket listings; news and rumors are secondary"}, website: SITE_ORIGIN });
       }
       throw new UserError("Página não encontrada.", 404);
@@ -58,6 +60,10 @@ async function handle(request: Request, context: {params: Promise<{action:string
       await database().prepare("DELETE FROM watch_artists WHERE id=?").bind(String(body.id)).run();
       return json({ok:true});
     }
+    if (action === "automation/alerts/prepare") return json(await prepareAlert());
+    if (action === "automation/alerts/claim") return json(await claimAlert(body.id));
+    if (action === "automation/alerts/ack") return json(await acknowledgeAlert(body.id,body.messageId));
+    if (action === "automation/alerts/error") return json(await alertFailure(body.id,body.status,body.error));
     if (action === "settings" || action === "automation/settings") return json(await savePreferences(body));
     if (action === "automation/confirmations/claim") return json(await claimConfirmation(body.id));
     if (action === "automation/confirmations/ack") return json(await acknowledgeConfirmation(body.id,body.messageId));
@@ -70,9 +76,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
       return json({ok:true});
     }
     if (action === "automation/ack") {
-      const ids = Array.isArray(body.ids) ? body.ids.filter((id:unknown) => typeof id === "string" && /^[a-f0-9]{64}$/.test(id)).slice(0,100) : [];
-      for (const id of ids) await database().prepare("UPDATE show_events SET notified=1 WHERE id=?").bind(id).run();
-      return json({acknowledged:ids.length});
+      throw new UserError("Use /api/automation/alerts/ack com o resumo reservado e o ID real do Gmail.",409);
     }
     if (action === "automation/status") {
       if (body.schedule !== "active") throw new UserError("Estado inválido.");
