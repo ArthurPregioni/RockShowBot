@@ -1,9 +1,10 @@
 import {savePreferences,pendingConfirmations,claimConfirmation,acknowledgeConfirmation,confirmationFailure} from "../../../lib/preference-confirmations";
 import { musicAction } from "../../../lib/music-imports";
+import { sourcesForCountries } from "../../../lib/radar-sources";
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { appleConfiguration, appleLibrary, digest, todayInBrazil, type Candidate, type ShowEvent } from "../../../lib/bot-core";
-import { addArtist, dashboard, database, scan, settings, SITE_ORIGIN, saveEvents, UserError, watchlist } from "../../../lib/cloud-bot";
+import { addArtist, dashboard, database, scan, scanOfficialSources, settings, SITE_ORIGIN, saveEvents, UserError, watchlist } from "../../../lib/cloud-bot";
 
 export const dynamic = "force-dynamic";
 function json(value: unknown, status = 200, cookie?: string) {
@@ -41,7 +42,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
       if (action === "automation/context") {
         const preferences = await settings();
         const alerts = preferences.notifications ? (await database().prepare("SELECT * FROM show_events WHERE notified=0 AND (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN starts_at='' THEN 1 ELSE 0 END, starts_at, created_at LIMIT 100").bind(todayInBrazil(),preferences.countries).all()).results : [];
-        return json({ artists: await watchlist(), settings: {...preferences,countries:JSON.parse(preferences.countries)}, pendingAlerts: alerts, searchScope: {concertDateFrom:todayInBrazil(),announcementDateFilter:null,priority:"official upcoming tour dates, venues, festivals and ticket listings; news and rumors are secondary"}, website: SITE_ORIGIN });
+        return json({ artists: await watchlist(), settings: {...preferences,countries:JSON.parse(preferences.countries)}, sources:sourcesForCountries(JSON.parse(preferences.countries)), pendingAlerts: alerts, searchScope: {concertDateFrom:todayInBrazil(),announcementDateFilter:null,priority:"official upcoming tour dates, venues, festivals and ticket listings; news and rumors are secondary"}, website: SITE_ORIGIN });
       }
       throw new UserError("Página não encontrada.", 404);
     }
@@ -62,6 +63,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
     if (action === "automation/confirmations/ack") return json(await acknowledgeConfirmation(body.id,body.messageId));
     if (action === "automation/confirmations/error") return json(await confirmationFailure(body.id,body.status,body.error));
     if (action === "scan" || action === "automation/scan") return json(await scan(Number(body.offset || 0)));
+    if (action === "sources/scan" || action === "automation/sources/scan") return json(await scanOfficialSources(Number(body.offset||0)));
     if (action === "events" || action === "automation/events") return json({added:await saveEvents((body.events || []) as ShowEvent[])});
     if (action === "events/remove") {
       await database().prepare("DELETE FROM show_events WHERE id=?").bind(String(body.id)).run();

@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "reviewedAt": "2026-10-29",
+  "official": [
+    {"id":"live-nation-br","name":"Live Nation Brasil","kind":"promoter","countries":["BR"],"url":"https://www.livenation.com.br/"},
+    {"id":"30e","name":"30e","kind":"promoter","countries":["BR"],"url":"https://www.30e.live/pt-BR/tours/"},
+    {"id":"move","name":"Move Concerts","kind":"promoter","countries":["BR","AR","CO","PE"],"url":"https://moveconcerts.com/pt/inicio/"},
+    {"id":"eventim-br","name":"Eventim Brasil","kind":"ticketing","countries":["BR"],"url":"https://www.eventim.com.br/"},
+    {"id":"ticketmaster-br","name":"Ticketmaster Brasil","kind":"ticketing","countries":["BR"],"url":"https://www.ticketmaster.com.br/"},
+    {"id":"livepass","name":"Livepass","kind":"ticketing","countries":["BR"],"url":"https://www.livepass.com.br/"},
+    {"id":"lolla-br","name":"Lollapalooza Brasil","kind":"festival","countries":["BR"],"url":"https://www.lollapaloozabr.com/"},
+    {"id":"rock-in-rio","name":"Rock in Rio Brasil","kind":"festival","countries":["BR"],"url":"https://rockinrio.com/rio/pt-br/"},
+    {"id":"df","name":"DF Entertainment","kind":"promoter","countries":["AR"],"url":"https://www.dfentertainment.com/"},
+    {"id":"allaccess","name":"AllAccess","kind":"ticketing","countries":["AR"],"url":"https://www.allaccess.com.ar/"},
+    {"id":"movistar-ar","name":"Movistar Arena Argentina","kind":"venue","countries":["AR"],"url":"https://www.movistararena.com.ar/"},
+    {"id":"dg-medios","name":"DG Medios","kind":"promoter","countries":["CL"],"url":"https://dgmedios.com/proximos-shows"},
+    {"id":"bizarro","name":"Bizarro Live Entertainment","kind":"promoter","countries":["CL"],"url":"https://bizarro.cl/"},
+    {"id":"puntoticket","name":"PuntoTicket","kind":"ticketing","countries":["CL"],"url":"https://www.puntoticket.com/"},
+    {"id":"paramo","name":"Páramo Presenta","kind":"promoter","countries":["CO"],"url":"https://www.paramopresenta.com/"},
+    {"id":"tuboleta","name":"TuBoleta","kind":"ticketing","countries":["CO"],"url":"https://www.tuboleta.com/"},
+    {"id":"teleticket","name":"Teleticket","kind":"ticketing","countries":["PE"],"url":"https://teleticket.com.pe/"},
+    {"id":"redtickets","name":"RedTickets Uruguay","kind":"ticketing","countries":["UY"],"url":"https://redtickets.uy/"},
+    {"id":"ticketea","name":"Ticketea Paraguay","kind":"ticketing","countries":["PY"],"url":"https://ticketea.com.py/"},
+    {"id":"ticketshow","name":"TicketShow Ecuador","kind":"ticketing","countries":["EC"],"url":"https://www.ticketshow.com.ec/"},
+    {"id":"superticket","name":"SuperTicket Bolivia","kind":"ticketing","countries":["BO"],"url":"https://superticket.bo/"},
+    {"id":"ticketmundo-ve","name":"Ticketmundo Venezuela","kind":"ticketing","countries":["VE"],"url":"https://www.ticketmundo.com.ve/"}
+  ],
+  "journalism": [
+    {"id":"flesch","name":"José Norberto Flesch","kind":"journalist","countries":["BR"],"url":"https://www.youtube.com/channel/UCOUkIsF8PZaadksaqp_ocHA","feed":"https://www.youtube.com/feeds/videos.xml?channel_id=UCOUkIsF8PZaadksaqp_ocHA","profiles":["https://x.com/jnflesch","https://www.instagram.com/jnflesch/"]}
+  ]
+}

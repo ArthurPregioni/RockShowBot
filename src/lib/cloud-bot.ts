@@ -1,4 +1,6 @@
 import { musicProviders } from "./music-providers";
+import { collectSource, sourceBatch } from "./official-discovery";
+import { isJournalism } from "./radar-sources";
 import { env } from "cloudflare:workers";
 import { appleConfiguration, discover, digest, normalize, webURL, todayInBrazil, upcomingDate, type ShowEvent } from "./bot-core";
 
@@ -54,7 +56,7 @@ export async function saveEvents(input: ShowEvent[]) {
     const key = date ? [artist.normalized, date, normalize(city), event.country].join("|") : artist.normalized + "|" + link;
     const id = await digest(key);
     const result = await database().prepare("INSERT OR IGNORE INTO show_events(id,artist,title,country,city,starts_at,url,source,status) VALUES(?,?,?,?,?,?,?,?,?)")
-      .bind(id, artist.name, event.title.slice(0, 400), event.country, city, date, link, String(event.source || new URL(link).hostname).slice(0, 200), event.status === "listed" && date ? "listed" : "unverified").run();
+      .bind(id, artist.name, event.title.slice(0, 400), event.country, city, date, link, String(event.source || new URL(link).hostname).slice(0, 200), event.status === "listed" && date && !isJournalism(String(event.source||""),link) ? "listed" : "unverified").run();
     added += result.meta.changes;
   }
   return added;
@@ -77,4 +79,18 @@ export async function scan(offset = 0) {
   await database().prepare("DELETE FROM show_events WHERE starts_at='' AND created_at<datetime('now','-60 day')").run();
   await database().prepare("INSERT INTO scan_runs(id,new_events,warnings) VALUES(?,?,?)").bind(crypto.randomUUID(), added, JSON.stringify(warnings)).run();
   return { added, warnings, total: pairs.length, nextOffset: offset + batch.length < pairs.length ? offset + batch.length : null };
+}
+
+export async function scanOfficialSources(offset=0) {
+  if(!Number.isInteger(offset)||offset<0)throw new UserError("Posição de fonte inválida.");
+  const [artists,preferences]=await Promise.all([watchlist(),settings()]);
+  const countries=JSON.parse(preferences.countries) as string[];
+  if(!artists.length)return {added:0,results:[],warnings:[],total:0,nextOffset:null};
+  const selection=sourceBatch(countries,offset);
+  const results=await Promise.all(selection.batch.map(source=>collectSource(source,artists.map(artist=>artist.name),countries)));
+  let added=0;
+  for(const result of results)for(let start=0;start<result.events.length;start+=100)added+=await saveEvents(result.events.slice(start,start+100));
+  const warnings=results.flatMap(result=>result.warnings);
+  await database().prepare("INSERT INTO scan_runs(id,new_events,warnings) VALUES(?,?,?)").bind(crypto.randomUUID(),added,JSON.stringify(warnings)).run();
+  return {added,results,warnings,total:selection.total,nextOffset:selection.nextOffset};
 }
