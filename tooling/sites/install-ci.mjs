@@ -19,7 +19,7 @@ if (![
 }
 
 if (readExecutionProfile() === "managed-linux") {
-  const result = spawnSync("bash", [path.join(projectRoot, "scripts/install-ci.sh")], {
+  const result = spawnSync("bash", [path.join(projectRoot, "tooling/sites/install-ci.sh")], {
     stdio: "inherit",
   });
   if (result.error) throw result.error;

@@ -36,7 +36,7 @@ Você precisa de Python 3.10 ou mais recente. O app e os testes usam apenas a bi
 
 4. Abra <http://localhost:8000>. O navegador pedirá usuário `admin` e a senha que você colocou em `APP_PASSWORD`.
 
-5. Cadastre uma banda, por exemplo `Sepultura`, ou importe `examples/artistas-exemplo.csv` pela seção **Importar CSV**.
+5. Cadastre uma banda, por exemplo `Sepultura`, ou importe `docs/examples/artistas-exemplo.csv` pela seção **Importar CSV**.
 
 6. Em **Dica de possível show**, informe artista, título, data, cidade, região e um link. A data pode ser escolhida no calendário. A dica aparece na lista com o selo **Dica não verificada**. Se houver SMTP configurado, também chega um e-mail.
 
@@ -145,11 +145,11 @@ Angra
 Ratos de Porão
 ```
 
-Artistas repetidos são ignorados. O exemplo `examples/artistas-exemplo.csv` pode ser usado para experimentar a importação.
+Artistas repetidos são ignorados. O exemplo `docs/examples/artistas-exemplo.csv` pode ser usado para experimentar a importação.
 
 ## Hospedar no Render
 
-O repositório inclui `Dockerfile` e `render.yaml` para criar um serviço web em Frankfurt, com disco persistente para o SQLite. O blueprint pede que você defina a senha administrativa ao criá-lo.
+O repositório inclui `deploy/Dockerfile` e `render.yaml` para criar um serviço web em Frankfurt, com disco persistente para o SQLite. O blueprint pede que você defina a senha administrativa ao criá-lo.
 
 1. Envie este repositório para um Git remoto que sua conta Render consiga acessar (a cópia de desenvolvimento está em [GitHub](https://github.com/ArthurPregioni/RockShowBot)).
 2. Abra o [Render Dashboard](https://dashboard.render.com/blueprint/new), conecte o repositório e crie um **Blueprint**. Revise os recursos e custos que ele vai criar antes de aplicar.
@@ -165,7 +165,7 @@ Não coloque o servidor diretamente na internet sem `APP_PASSWORD`. Use HTTPS pa
 ### Executar com Docker em outro host
 
 ```sh
-docker build -t rockshowbot .
+docker build -f deploy/Dockerfile -t rockshowbot .
 docker run --name rockshowbot --restart unless-stopped \
   -p 8000:10000 \
   -e APP_PASSWORD='escolha-uma-senha-forte' \

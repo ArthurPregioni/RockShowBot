@@ -22,7 +22,7 @@ export async function digest(value: string) {
   return [...new Uint8Array(bytes)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 export const COUNTRY_NAMES: Record<string, string> = {
-  BR: "Brasil", AR: "Argentina", CL: "Chile", UY: "Uruguai", PY: "Paraguai", BO: "Bolívia", PE: "Peru", EC: "Equador",
+  GY: "Guiana", SR: "Suriname", GF: "Guiana Francesa", BR: "Brasil", AR: "Argentina", CL: "Chile", UY: "Uruguai", PY: "Paraguai", BO: "Bolívia", PE: "Peru", EC: "Equador",
   CO: "Colômbia", VE: "Venezuela", MX: "México", CR: "Costa Rica", PA: "Panamá", GT: "Guatemala", DO: "República Dominicana",
   US: "Estados Unidos", CA: "Canadá", PT: "Portugal", ES: "Espanha", GB: "Reino Unido", FR: "França", DE: "Alemanha", AU: "Austrália", JP: "Japão",
 };

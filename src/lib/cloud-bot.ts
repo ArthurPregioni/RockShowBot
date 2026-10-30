@@ -21,12 +21,13 @@ export function appleStatus(origin = SITE_ORIGIN) {
   catch (error) { return { ready: false, message: (error as Error).message, origin }; }
 }
 export async function dashboard() {
-  const [artists, preferences, shows, lastRun] = await Promise.all([
+  const [artists, preferences, shows, lastRun, confirmation] = await Promise.all([
     watchlist(), settings(),
     database().prepare("SELECT * FROM show_events WHERE (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(COALESCE((SELECT countries FROM bot_settings WHERE id=1),'[\"BR\"]'))) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN starts_at='' THEN 1 ELSE 0 END, starts_at, artist, created_at DESC LIMIT 300").bind(todayInBrazil()).all(),
     database().prepare("SELECT * FROM scan_runs ORDER BY created_at DESC LIMIT 1").first(),
+    database().prepare("SELECT status,last_error,created_at,sent_at FROM preference_confirmations ORDER BY created_at DESC,rowid DESC LIMIT 1").first(),
   ]);
-  return { artists, settings: { ...preferences, countries: JSON.parse(preferences.countries) }, events: shows.results, lastRun,
+  return { artists, settings: { ...preferences, countries: JSON.parse(preferences.countries) }, events: shows.results, lastRun, confirmation,
     apple: appleStatus(), music: musicProviders(appleStatus().ready,env.SPOTIFY_CLIENT_ID), sources: { news: true, ticketmaster: !!env.TICKETMASTER_API_KEY, predicthq: !!env.PREDICTHQ_API_KEY } };
 }
 export async function addArtist(name: string) {

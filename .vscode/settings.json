@@ -1,0 +1,12 @@
+{
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.wrangler": true,
+    "**/.sites-runtime": true,
+    "**/.vinext": true,
+    "**/.cache": true,
+    "**/dist": true,
+    "**/__pycache__": true,
+    "**/*.tsbuildinfo": true
+  }
+}

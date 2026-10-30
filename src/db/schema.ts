@@ -40,3 +40,15 @@ export const scans = sqliteTable("scan_runs", {
   newEvents: integer("new_events").notNull().default(0),
   warnings: text("warnings").notNull().default("[]"),
 });
+
+export const preferenceConfirmations = sqliteTable("preference_confirmations", {
+  id: text("id").primaryKey(),
+  dedupeKey: text("dedupe_key").notNull().unique(),
+  email: text("email").notNull(),
+  snapshot: text("snapshot").notNull(),
+  status: text("status").notNull().default("pending"),
+  messageId: text("message_id").notNull().default(""),
+  lastError: text("last_error").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  sentAt: text("sent_at"),
+});

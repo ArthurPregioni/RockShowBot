@@ -3,7 +3,7 @@ services:
     name: rockshowbot
     runtime: docker
     region: frankfurt
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./deploy/Dockerfile
     healthCheckPath: /healthz
     disk:
       name: rockshowbot-data

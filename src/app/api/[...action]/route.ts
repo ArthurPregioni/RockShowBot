@@ -1,3 +1,4 @@
+import {savePreferences,pendingConfirmations,claimConfirmation,acknowledgeConfirmation,confirmationFailure} from "../../../lib/preference-confirmations";
 import { musicAction } from "../../../lib/music-imports";
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "../../chatgpt-auth";
@@ -35,6 +36,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
     }
     if (request.method === "GET") {
       if (action.startsWith("music/")) return await musicAction(request,action,{},user!.userId,originFor(request));
+      if (action === "automation/confirmations") return json({confirmations:await pendingConfirmations()});
       if (action === "dashboard") return json(await dashboard());
       if (action === "automation/context") {
         const preferences = await settings();
@@ -55,17 +57,10 @@ async function handle(request: Request, context: {params: Promise<{action:string
       await database().prepare("DELETE FROM watch_artists WHERE id=?").bind(String(body.id)).run();
       return json({ok:true});
     }
-    if (action === "settings") {
-      const email = typeof body.email === "string" ? body.email.trim() : "";
-      if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254)) throw new UserError("Informe um e-mail válido.");
-      if (!Array.isArray(body.countries)) throw new UserError("Escolha os países para acompanhar.");
-      const countries = [...new Set(body.countries.map((value:unknown) => String(value).toUpperCase()))] as string[];
-      if (!countries.length || countries.length > 30 || countries.some(value => !/^[A-Z]{2}$/.test(value))) throw new UserError("Escolha entre 1 e 30 países válidos.");
-      if (body.notifications && !email) throw new UserError("Informe seu e-mail para ativar alertas.");
-      await database().prepare("INSERT INTO bot_settings(id,email,notifications,countries) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email,notifications=excluded.notifications,countries=excluded.countries")
-        .bind(email, body.notifications === true ? 1 : 0, JSON.stringify(countries)).run();
-      return json({ok:true});
-    }
+    if (action === "settings" || action === "automation/settings") return json(await savePreferences(body));
+    if (action === "automation/confirmations/claim") return json(await claimConfirmation(body.id));
+    if (action === "automation/confirmations/ack") return json(await acknowledgeConfirmation(body.id,body.messageId));
+    if (action === "automation/confirmations/error") return json(await confirmationFailure(body.id,body.status,body.error));
     if (action === "scan" || action === "automation/scan") return json(await scan(Number(body.offset || 0)));
     if (action === "events" || action === "automation/events") return json({added:await saveEvents((body.events || []) as ShowEvent[])});
     if (action === "events/remove") {

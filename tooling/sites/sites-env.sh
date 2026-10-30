@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 runtime_root="${SITES_RUNTIME_ROOT:-${project_root}/.sites-runtime}"
 
 mkdir -p \
@@ -45,7 +45,7 @@ if [[ "${1:-}" == "--" ]]; then
 fi
 
 if [[ "$#" -eq 0 ]]; then
-  echo "usage: scripts/sites-env.sh -- command [args...]" >&2
+  echo "usage: tooling/sites/sites-env.sh -- command [args...]" >&2
   exit 64
 fi
 

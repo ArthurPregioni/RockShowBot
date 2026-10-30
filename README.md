@@ -12,8 +12,8 @@
    - **Spotify:** use **Importar pelo navegador** e a extensão na seção Sua Biblioteca → Artistas do Spotify. Não requer cadastrar aplicativo Spotify para essa leitura.
    - **YouTube Music:** ainda sem implementação da importação da biblioteca de artistas.
 3. Marque os artistas e clique em **Importar**. Nenhum artista é adicionado antes da sua confirmação; nomes repetidos são ignorados. Repita com outros serviços ou pesquisas para completar o radar.
-4. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para América Latina.
-5. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. A rotina em nuvem usa o Gmail conectado para enviar um resumo apenas quando houver novidades; mensagens ficam pendentes se o envio falhar.
+4. Escolha os países em **Onde & como**. Brasil é o padrão; há um atalho para os 12 países da América do Sul.
+5. Para receber alertas, informe seu e-mail, marque a autorização e salve as preferências. Cada alteração com e-mail preenchido solicita uma confirmação com o resumo dos países e do estado dos alertas, inclusive quando você desativa os alertas. Uma tarefa em nuvem verifica essa fila a cada 15 minutos usando o Gmail conectado. A interface distingue confirmação pendente de enviada. Se o Gmail precisar ser reconectado, as mensagens permanecem pendentes; envios ambíguos são verificados antes de qualquer nova tentativa. Os resumos de shows continuam nas rotinas das 9h e 21h.
 6. O radar acompanha **shows que ainda vão acontecer**, mesmo que tenham sido anunciados há meses. O painel ordena pela data do show; eventos passados saem da agenda e dos alertas pendentes. **Buscar agora** consulta as APIs de eventos configuradas e notícias recentes como complemento. A rotina das 9h e 21h (America/Sao_Paulo) prioriza agendas oficiais de artistas, casas, festivais e bilheterias, sem limitar a busca à data de publicação. Consulte **Shows com data** para ver a agenda e **Possíveis shows** para ver notícias e rumores. O retorno das APIs pode ser parcial; o bot não garante cobertura completa de todos os locais. Uma data de publicação nunca vira data de show.
 
 ### Apple Music e Spotify: importar pelo navegador
@@ -65,28 +65,33 @@ Para desenvolvimento do painel: Node >=22.13, `npm ci`, `npm run dev` e login lo
 ### Organização do repositório
 
 ```text
-app/                   painel web, importação e rotas HTTP
-lib/                   regras do radar, provedores e sessões
-worker/                entrada Cloudflare/Sites
-db/, drizzle/          esquema e migrações do banco (na raiz)
-extensions/browser/    código da extensão Firefox e Chromium
-selfhosted/            servidor Python e seus arquivos estáticos
-tests/web/             testes do painel, provedores e extensão
-tests/browser/         regressões do coletor em navegador real
-tests/fixtures/        páginas controladas para regressões
-tests/selfhosted/      testes do servidor Python
-scripts/               build, empacotamento e utilitários
-docs/                  documentação adicional
-public/                arquivos publicados e protocolo da rotina
+src/
+  app/                 páginas e rotas HTTP
+  lib/                 radar, provedores e preferências
+  db/                  esquema e acesso ao banco
+  worker/              entrada da hospedagem
+  components/, hooks/  componentes da interface
+  vendor/              estilos e licenças do starter
+extensions/browser/    extensão Firefox e Chromium
+selfhosted/            servidor Python independente
+scripts/               utilitários do projeto
+  package-extension.mjs
+  create_apple_token.py
+tooling/sites/         infraestrutura de build e preview
+deploy/                Dockerfile da versão Python
+drizzle/               migrações imutáveis do banco
+tests/                 testes web, navegador, fixtures e Python
+docs/                  documentação e exemplos
+public/                arquivos publicados e protocolos das tarefas
 ```
 
-`rockshowbot.py` na raiz é apenas um lançador compatível com o comando antigo. Os arquivos de configuração do framework ficam na raiz porque são usados pelas ferramentas de build. Pacotes gerados da extensão ficam em `.extension-build/` e `public/downloads/`, fora do Git. Dados locais (`rockshowbot.db`), credenciais e dependências também ficam fora do versionamento. A pasta `components/ui/` contém o código do starter; não é outra aplicação.
+`rockshowbot.py` na raiz é apenas um lançador compatível com o comando antigo. Os arquivos de configuração do framework ficam na raiz porque são usados pelas ferramentas de build. Pacotes gerados da extensão ficam em `.extension-build/` e `public/downloads/`, fora do Git. Dados locais (`rockshowbot.db`), credenciais e dependências também ficam fora do versionamento. A pasta `src/components/ui/` contém o código do starter; não é outra aplicação.
 
 ### Arquitetura da versão hospedada
 
-O painel React/Vinext e as rotas em `app/api/` executam em Cloudflare Workers pelo Sites. As tabelas persistentes D1 são definidas em `db/schema.ts`, com migrações versionadas em `drizzle/`. A identidade e o acesso privado são fornecidos pelo Sites, sem senha local. As rotas `/api/automation/*` dependem desse acesso privado; não publique essa versão como site anônimo sem implementar autorização própria para essas rotas.
+O painel React/Vinext e as rotas em `src/app/api/` executam em Cloudflare Workers pelo Sites. As tabelas persistentes D1 são definidas em `src/db/schema.ts`, com migrações versionadas em `drizzle/`. A identidade e o acesso privado são fornecidos pelo Sites, sem senha local. As rotas `/api/automation/*` dependem desse acesso privado; não publique essa versão como site anônimo sem implementar autorização própria para essas rotas.
 
-A tarefa vinculada consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ela é complementar à agenda: a tarefa em nuvem procura primeiro shows futuros nas fontes oficiais, mesmo quando o anúncio é antigo. Shows esgotados continuam relevantes; shows cancelados e adiados sem nova data não entram como shows marcados. Ticketmaster e PredictHQ são complementos opcionais. A API oficial Apple requer token de desenvolvedor; a importação pela extensão lê a interface da biblioteca aberta no navegador sem esse token. O envio na rotina depende de Gmail conectado e de a opção de alertas estar salva.
+A tarefa de shows consulta os endpoints e segue `public/automation.txt`. A busca de notícias funciona sem chave de API e produz indícios não verificados. Ela é complementar à agenda: a tarefa em nuvem procura primeiro shows futuros nas fontes oficiais, mesmo quando o anúncio é antigo. Shows esgotados continuam relevantes; shows cancelados e adiados sem nova data não entram como shows marcados. Ticketmaster e PredictHQ são complementos opcionais. A API oficial Apple requer token de desenvolvedor; a importação pela extensão lê a interface da biblioteca aberta no navegador sem esse token. O envio de alertas depende de Gmail conectado e de a opção de alertas estar salva. A confirmação de preferências usa uma fila separada em `preference_confirmations`, o protocolo `public/preferences-confirmations.txt` e uma tarefa própria a cada 15 minutos. Ela não executa buscas de shows. O Gmail precisa estar autenticado para qualquer envio real.
 
 O código Python abaixo permanece disponível como alternativa self-hosted. Ele não precisa estar executando para a instância Sites funcionar.
 
