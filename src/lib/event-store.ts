@@ -26,9 +26,9 @@ export async function reconcileEvents(){
   const active=(await db.prepare("SELECT * FROM show_events WHERE status IN ('listed','unverified')").all<StoredEvent>()).results;
   for(const event of active){const reason=suppressReason(event,active);if(reason)await db.prepare("UPDATE show_events SET status='superseded',suppress_reason=? WHERE id=? AND status='unverified'").bind(reason,event.id).run();}
 }
-export async function visibleEvents(countries:string[]){
+export async function visibleEvents(countries:string[],limit=300){
   await reconcileEvents();
-  return (await database().prepare("SELECT * FROM show_events WHERE status IN ('listed','unverified') AND (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN status='listed' THEN 0 ELSE 1 END,CASE WHEN starts_at='' THEN 1 ELSE 0 END,starts_at,artist LIMIT 300").bind(todayInBrazil(),JSON.stringify(countries)).all<StoredEvent>()).results;
+  return (await database().prepare("SELECT * FROM show_events WHERE status IN ('listed','unverified') AND (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN status='listed' THEN 0 ELSE 1 END,CASE WHEN starts_at='' THEN 1 ELSE 0 END,starts_at,artist LIMIT ?").bind(todayInBrazil(),JSON.stringify(countries),Math.min(10000,Math.max(1,limit))).all<StoredEvent>()).results;
 }
 export async function storeEvents(input:ShowEvent[],artists:{name:string;normalized:string}[],countries:string[]){
   if(!Array.isArray(input)||input.length>100)throw new UserError("Envie até 100 eventos por vez.");

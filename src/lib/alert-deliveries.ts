@@ -10,7 +10,7 @@ const deliveryView=(row:Delivery)=>{const counts=renderAlert(row.id,JSON.parse(r
 export async function pendingAlerts(){
   const preferences=await settings();if(!preferences.notifications||!preferences.email)return [];
   const recipient=preferences.email.trim().toLowerCase(),db=database();
-  const visible=await visibleEvents(JSON.parse(preferences.countries));
+  const visible=await visibleEvents(JSON.parse(preferences.countries),10000);
   // Preserve legacy delivery flags without inventing Gmail IDs or historical send times.
   const legacy=(await db.prepare("SELECT * FROM show_events WHERE notified=1 AND status<>'duplicate'").all<StoredEvent>()).results;
   for(let offset=0;offset<legacy.length;offset+=80){
