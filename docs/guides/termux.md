@@ -143,3 +143,5 @@ Na troca, preserve um backup da instância atual, valide o destino, depois desat
 ## QA disponível
 
 `python3 -m unittest discover -s tests/selfhosted -v` inclui testes do instalador em diretórios temporários, preservação de outras aplicações, configuração sem execução de shell, backup/restauração, rejeição de arquivos inválidos e servidor Python real com login e encerramento por SIGTERM. Esses testes rodam em Linux e não equivalem à validação do Termux no aparelho físico.
+
+Em um computador Linux com Docker, `python3 tests/integration/termux-runit.py` verifica instalação, serviço runit real, login e gravação via HTTP, recuperação após falha forçada, boot habilitado/desabilitado, backup/restauração e preservação de outro serviço. A execução usa um contêiner descartável, sem montar dados privados do computador. O wake lock é simulado; esse teste também não comprova o comportamento do Android físico. A CI executa essa verificação junto do job Python 3.12.

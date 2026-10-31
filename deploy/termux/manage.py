@@ -149,7 +149,8 @@ def install(layout):
     layout.config.chmod(0o600)
     first_install = not owned
     invoke = f"{shlex.quote(str(layout.python))} {shlex.quote(str(layout.manager))}"
-    header = f"#!{layout.prefix}/bin/sh\n# RockShowBot managed\n"
+    header = (f"#!{layout.prefix}/bin/sh\n# RockShowBot managed\n"
+              f"export PREFIX={shlex.quote(str(layout.prefix))}\n")
     private_write(marker, MARKER)
     if first_install:
         private_write(layout.service / "down", "")
@@ -211,6 +212,7 @@ def stop(layout):
 
 def run(layout):
     config = validated_config(layout)
+    os.umask(0o077)
     layout.state.mkdir(parents=True, exist_ok=True, mode=0o700)
     lock = (layout.state / "instance.lock").open("a")
     try:

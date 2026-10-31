@@ -44,6 +44,8 @@ Se alterar o esquema, gere uma nova migração com `npm run db:generate`; nunca 
 
 Explique no pull request o problema, o comportamento resultante e como verificou a mudança. Use exemplos pequenos e sem dados pessoais. Não acrescente componentes, bibliotecas ou configurações sem um uso concreto no projeto.
 
+Para mudanças no preset Termux, os testes Python cobrem configuração e arquivos gerados. `python3 tests/integration/termux-runit.py` exercita o ciclo completo do serviço em um contêiner Linux com runit real e wake lock simulado. A validação de reboot e restrições do Android precisa ser feita no aparelho.
+
 ## Dados e credenciais
 
 Use os arquivos de exemplo. `.env`, `.dev.vars`, bancos, chaves, tokens e `.openai/hosting.json` não entram no Git. Faça testes de e-mail com transportes controlados; não envie mensagens de QA para usuários reais. Não inclua logs com cabeçalhos de autorização, e-mails pessoais ou IDs da sua biblioteca.

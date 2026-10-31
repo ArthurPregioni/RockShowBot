@@ -28,6 +28,9 @@ jobs:
         run: |
           docker build -f deploy/python/Dockerfile -t rockshowbot-local-qa .
           python tests/integration/standalone-docker.py
+      - name: Verify native service lifecycle for the Termux preset (Linux simulation)
+        if: matrix.python-version == '3.12'
+        run: python tests/integration/termux-runit.py
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
