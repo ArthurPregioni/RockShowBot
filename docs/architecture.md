@@ -3,6 +3,7 @@
 O repositório contém duas aplicações independentes. O painel web usa React/Vinext, Workers e D1 no Sites. O servidor `selfhosted/` usa Python, SQLite e SMTP, com uma interface própria. Cada instalação tem um único radar compartilhado por seus administradores; não há isolamento entre múltiplos usuários dentro da mesma instância.
 
 ```text
+.github/                   contribuição, segurança, templates e integração contínua
 config/                    configurações de Vite, PostCSS, ESLint e Drizzle
 src/
   types/                   declarações de ambiente e serviços de hospedagem
@@ -35,6 +36,21 @@ tooling/sites/             infraestrutura de build, preview e publicação
 ```
 
 As configurações de build, CSS, lint e migrações ficam em `config/`. `vite.config.mjs` e `eslint.config.mjs` são entradas mínimas para a descoberta automática das ferramentas e do editor. `package.json`, seu lockfile, `tsconfig.json` e `render.yaml` permanecem na raiz por convenção das ferramentas. As declarações de ambiente ficam em `src/types/`. `next-env.d.ts` é gerado automaticamente pelo framework na raiz, é ignorado pelo Git e fica oculto no explorador do VS Code; não deve ser movido nem editado manualmente. `.openai/hosting.example.json` descreve apenas os bindings genéricos; `.openai/hosting.json` guarda a identidade local da instalação e é ignorado. Builds, bancos, dependências, tokens e preferências de ferramentas ficam fora do Git.
+
+### O que permanece na raiz
+
+| Arquivos | Motivo |
+| --- | --- |
+| `package.json`, `package-lock.json`, `.node-version`, `.npmrc` | Dependências, scripts e versão do ambiente Node |
+| `tsconfig.json` | Configuração TypeScript descoberta pelo editor e pelo framework |
+| `vite.config.mjs`, `eslint.config.mjs` | Entradas mínimas; as configurações completas estão em `config/` |
+| `.dev.vars`, `.dev.vars.example` | Configuração local do Worker e exemplo para novas instalações; o arquivo com valores reais é ignorado pelo Git |
+| `render.yaml`, `.dockerignore` | Descoberta do blueprint de hospedagem e contexto do build Docker |
+| `README.md`, `LICENSE`, `.gitignore` | Apresentação, licença e regras do repositório |
+
+`node_modules/`, `dist/`, `.wrangler/`, `.sites-runtime/`, `.vinext/`, `.next/` e `next-env.d.ts` são gerados pelas ferramentas. Não são código espalhado nem entram no Git; não devem ser movidos manualmente. O banco `rockshowbot.db` é dado local da aplicação Python, também ignorado pelo Git. Instalações Docker e Termux já o armazenam fora do código.
+
+O arquivo `.vscode/settings.json` oculta artefatos gerados no Explorer, preservando o código e as configurações editáveis. Ele só é aplicado quando **RockShowBot** é a pasta aberta no VS Code. Se abrir a pasta pai **Projects**, as exclusões devem estar em `Projects/.vscode/settings.json`, com padrões limitados a `RockShowBot/`; a configuração da subpasta não é herdada.
 
 ## Fluxo do painel web
 

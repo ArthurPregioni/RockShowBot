@@ -111,8 +111,8 @@ Os arquivos na raiz são configurações das ferramentas e documentação de ent
 - [Usar o painel e importar artistas](docs/guides/using.md)
 - [Apple Music, Spotify e outros serviços](docs/guides/music-services.md)
 - [Fontes e como ampliar a cobertura](docs/guides/sources.md)
-- [Contribuir e customizar](CONTRIBUTING.md)
-- [Reportar vulnerabilidades](SECURITY.md)
+- [Contribuir e customizar](.github/CONTRIBUTING.md)
+- [Reportar vulnerabilidades](.github/SECURITY.md)
 
 As fontes podem ter cobertura parcial, mudar de formato ou bloquear coleta. Rumores permanecem identificados como não verificados até haver evidência oficial. YouTube Music ainda não tem importação da biblioteca de artistas.
 

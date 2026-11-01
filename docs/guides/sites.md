@@ -67,6 +67,6 @@ Veja [como usar o painel](using.md). O computador só precisa ficar ligado duran
 
 ## Atualizar e manter
 
-Faça alterações no seu fork, execute as verificações do [guia de contribuição](../../CONTRIBUTING.md) e publique no mesmo projeto registrado localmente. Preserve o manifesto e as configurações do operador; confirme que o Site continua privado. As migrações são incrementais. Antes de mudanças de esquema, exporte um backup do D1 com as ferramentas da sua hospedagem.
+Faça alterações no seu fork, execute as verificações do [guia de contribuição](../../.github/CONTRIBUTING.md) e publique no mesmo projeto registrado localmente. Preserve o manifesto e as configurações do operador; confirme que o Site continua privado. As migrações são incrementais. Antes de mudanças de esquema, exporte um backup do D1 com as ferramentas da sua hospedagem.
 
 As instruções de tarefas ficam no repositório para cada instalação usar a mesma versão do protocolo. As tarefas atualizam dados pela API; não precisam reconstruir ou publicar o Site em cada busca. Nenhuma credencial, banco ou tarefa da instalação do autor é distribuída neste repositório.

@@ -12,8 +12,8 @@
 ## Desenvolver
 
 - [Arquitetura e estrutura de pastas](architecture.md)
-- [Contribuição e customização](../CONTRIBUTING.md)
-- [Política de segurança](../SECURITY.md)
+- [Contribuição e customização](../.github/CONTRIBUTING.md)
+- [Política de segurança](../.github/SECURITY.md)
 - [Licença MIT](../LICENSE)
 
 O [README principal](../README.md) compara as duas aplicações. Os guias usam comandos a partir da raiz do repositório e domínios de exemplo; configure os valores da sua instalação. O CSV em `docs/examples/artistas-exemplo.csv` é uma alternativa apenas no servidor Python.

@@ -3,7 +3,7 @@ description: Falha na instalação, coleta, importação ou interface.
 body:
   - type: markdown
     attributes:
-      value: Para vulnerabilidades, siga SECURITY.md. Remova credenciais e dados pessoais dos relatos.
+      value: Para vulnerabilidades, siga .github/SECURITY.md. Remova credenciais e dados pessoais dos relatos.
   - type: dropdown
     id: application
     attributes:
