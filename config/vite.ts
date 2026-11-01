@@ -87,7 +87,7 @@ export default defineConfig(async ({ command }) => {
                 {
                   config: {
                     name: "sites-connector-preview",
-                    main: "../tooling/sites/connector-preview/worker.mjs",
+                    main: fileURLToPath(new URL("../tooling/sites/connector-preview/worker.mjs", import.meta.url)),
                     compatibility_date: "2026-05-15",
                   },
                 },

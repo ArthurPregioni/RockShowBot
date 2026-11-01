@@ -33,10 +33,37 @@ try{
  await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-4'});
  await post('events',{events:[{...show,startsAt:'2099-03-01'}]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.concerts,1);assert.equal(delivery.possibilities,0);
  await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-5'});
+
+ // Press announcements are not rumors and remain off the email queue until primary verification.
+ const press={...show,startsAt:'2099-04-01',source:'Cooperativa',url:'https://cooperativa.cl/noticias/qa',status:'reported'};
+ await post('events',{events:[press]});assert.equal((await post('automation/alerts/prepare',{})).delivery,null);
+ let dashboard=await(await client.request.get(base+'/api/dashboard')).json();assert.equal(dashboard.events.find(e=>e.artist===name&&e.starts_at==='2099-04-01').status,'reported');
+ await post('events',{events:[{...press,status:'listed'}]});assert.equal((await post('automation/alerts/prepare',{})).delivery,null);
+ await post('events',{events:[{...show,startsAt:'2099-04-01'}]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.concerts,1);
+ await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-6'});
+ // Confirmed concerts and rumors created together produce separate frozen summaries.
+ const mixedShow={...show,startsAt:'2099-04-10'},mixedRumor={...tip,startsAt:'2099-04-11'};
+ await post('events',{events:[mixedShow,mixedRumor]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.concerts,1);assert.equal(delivery.possibilities,0);
+ assert.doesNotMatch(delivery.body,/RUMORES/);
+ await post('events',{events:[{...mixedShow,title:'Updated event title'}]});await post('automation/alerts/claim',{id:delivery.id},409);
+ delivery=(await post('automation/alerts/prepare',{})).delivery;assert.match(delivery.body,/10\/04\/2099/);
+ await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-7'});
+ delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.concerts,0);assert.equal(delivery.possibilities,1);assert.doesNotMatch(delivery.body,/SHOWS CONFIRMADOS/);
+ await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-8'});
+ // Correcting the evidence category of an already-sent announcement does not resend the same dated facts.
+ await post('events',{events:[{...mixedRumor,status:'reported',source:'Billboard Argentina',url:'https://billboard.ar/shows/qa'}]});
+ await post('events',{events:[{...show,startsAt:mixedRumor.startsAt}]});assert.equal((await post('automation/alerts/prepare',{})).delivery,null);
+ // Replay the real Santiago Centro + changed URL problem, including deleting and rediscovering the row.
+ await post('settings',{email:'qa-alerts@example.test',notifications:true,countries:['SR','CL']});
+ const chile={...show,country:'CL',city:'Santiago Centro',startsAt:'2099-05-08',url:'https://puntoticket.com/evento/qa-'+encodeURIComponent(name)};
+ await post('events',{events:[chile]});delivery=(await post('automation/alerts/prepare',{})).delivery;assert.equal(delivery.count,1);
+ await post('automation/alerts/claim',{id:delivery.id});await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-9'});
+ dashboard=await(await client.request.get(base+'/api/dashboard')).json();await post('events/remove',{id:dashboard.events.find(e=>e.artist===name&&e.country==='CL').id});
+ await post('events',{events:[{...chile,city:'Santiago',url:'https://cdnp.puntoticket.com/qa-'+encodeURIComponent(name)}]});assert.equal((await post('automation/alerts/prepare',{})).delivery,null);
  await post('automation/ack',{ids:['a'.repeat(64)]},409);
  assert.equal((await context()).pendingAlerts.length,0);
- const data=await(await client.request.get(base+'/api/dashboard')).json();assert.ok(!data.events.some(e=>e.artist===name&&e.status==='unverified'));
- console.log('QA OK: source/city deduplication, rumor suppression, shared bill count, late co-headliner receipt, distinct dates, concurrent claim, ambiguous send, frozen content, acknowledgment and old endpoint rejection. No emails sent.');
+ const data=await(await client.request.get(base+'/api/dashboard')).json();assert.ok(!data.events.some(e=>e.artist===name&&e.status==='unverified'&&['','2099-03-01'].includes(e.starts_at)));assert.ok(data.events.some(e=>e.artist===name&&e.status==='listed'&&e.notified===1&&e.starts_at==='2099-04-11'));
+ console.log('QA OK: source/city deduplication, rumor suppression, shared bill count, late co-headliner receipt, distinct dates, concurrent claim, ambiguous send, frozen content, acknowledgment and old endpoint rejection. Separated confidence batches, press announcements excluded, updated content invalidates claims, persistent receipts across deleted rows and Chile city aliases. No emails sent.');
 }finally{
  const data=await(await client.request.get(base+'/api/dashboard')).json();for(const event of data.events.filter(e=>e.artist.startsWith(name)))await post('events/remove',{id:event.id});for(const artist of data.artists.filter(a=>a.name.startsWith(name)))await post('artists/remove',{id:artist.id});
  if(original)await post('settings',{email:original.email,notifications:!!original.notifications,countries:original.countries});await browser.close();

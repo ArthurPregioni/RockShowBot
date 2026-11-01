@@ -5,6 +5,7 @@ export function canonicalCity(city:string,country:string){
   let value=normalize(city.split(/[,/|]/)[0]);
   const aliases:Record<string,string>={"santiago de chile":"santiago","cidade de buenos aires":"buenos aires","ciudad autonoma de buenos aires":"buenos aires",caba:"buenos aires","sao paulo sp":"sao paulo","buenos aires argentina":"buenos aires"};
   value=aliases[value]||value;
+  if(country==="CL"&&value==="santiago centro")value="santiago";
   const suffix=normalize(COUNTRY_NAMES[country]||"");if(suffix&&value.endsWith(" "+suffix))value=value.slice(0,-suffix.length).trim();
   return value;
 }
@@ -20,17 +21,19 @@ export function scopeYear(event:StoredEvent){
 export function eventIdentity(event:StoredEvent){
   return event.starts_at?[normalize(event.artist),event.country,event.starts_at,canonicalCity(event.city,event.country)].join("|"):[normalize(event.artist),event.country,"possibility",scopeYear(event)].join("|");
 }
-export function eventRevision(event:StoredEvent){return [eventIdentity(event),event.status==="listed"?"listed":"unverified"].join("|");}
-export function notificationIdentity(event:StoredEvent){return event.starts_at?[event.country,event.starts_at,canonicalCity(event.city,event.country),canonicalURL(event.url),event.status].join("|"):eventRevision(event);}
+export function eventRevision(event:StoredEvent){return [eventIdentity(event),event.status].join("|");}
+export function notificationIdentity(event:StoredEvent){return eventRevision(event);}
+// Keep the shared bill receipt as well as the source-independent artist/date receipt.
+export function sharedNotificationIdentity(event:StoredEvent){return event.starts_at?[event.country,event.starts_at,canonicalCity(event.city,event.country),canonicalURL(event.url),event.status].join("|"):eventRevision(event);}
 export function suppressReason(event:StoredEvent,all:StoredEvent[],today=todayInBrazil()){
-  if(event.status!=="unverified")return "";
-  if(event.published_at&&/^\d{4}-\d{2}-\d{2}/.test(event.published_at)&&Date.parse(event.published_at)<Date.parse(today)-90*86400000)return "Antecipação publicada há mais de 90 dias; consultar a agenda oficial.";
+  if(!["unverified","reported"].includes(event.status))return "";
+  if(event.status==="unverified"&&event.published_at&&/^\d{4}-\d{2}-\d{2}/.test(event.published_at)&&Date.parse(event.published_at)<Date.parse(today)-90*86400000)return "Antecipação publicada há mais de 90 dias; consultar a agenda oficial.";
   const year=scopeYear(event);
   const confirmed=all.some(other=>other.status==="listed"&&other.starts_at>=today&&normalize(other.artist)===normalize(event.artist)&&other.country===event.country&&
     (event.starts_at?other.starts_at===event.starts_at&&(!event.city||!other.city||canonicalCity(event.city,event.country)===canonicalCity(other.city,event.country)):!year||other.starts_at.startsWith(year+"-")));
   return confirmed?"Antecipação superada por show confirmado do artista neste país.":"";
 }
-export function preferredEvent(group:StoredEvent[]){return [...group].sort((a,b)=>(b.status==="listed"?1:0)-(a.status==="listed"?1:0)||b.notified-a.notified||(a.created_at||"").localeCompare(b.created_at||"")||a.id.localeCompare(b.id))[0];}
+export function preferredEvent(group:StoredEvent[]){return [...group].sort((a,b)=>confidenceRank(b.status)-confidenceRank(a.status)||b.notified-a.notified||(a.created_at||"").localeCompare(b.created_at||"")||a.id.localeCompare(b.id))[0];}
 export type AlertGroup={key:string;artists:string[];date:string;country:string;city:string;title:string;url:string;source:string;status:string;eventIds:string[]};
 export function groupAlerts(events:StoredEvent[]):AlertGroup[]{
   const groups=new Map<string,AlertGroup>();
@@ -43,13 +46,26 @@ export function groupAlerts(events:StoredEvent[]):AlertGroup[]{
   }
   return [...groups.values()].sort((a,b)=>(a.status==="listed"?0:1)-(b.status==="listed"?0:1)||(a.date||"9999").localeCompare(b.date||"9999")||a.artists.join().localeCompare(b.artists.join()));
 }
+export function confidenceRank(status:string){return status==="listed"?2:status==="reported"?1:0;}
+export function alertBatch(events:StoredEvent[]){
+  // Press announcements remain on the dashboard while we seek primary evidence.
+  const listed=events.filter(event=>event.status==="listed");
+  return listed.length?listed:events.filter(event=>event.status==="unverified");
+}
+export function canonicalReceiptRevision(revision:string){
+  const parts=revision.split("|");
+  if(parts.length===5&&/^\d{4}-\d{2}-\d{2}$/.test(parts[2]))parts[3]=canonicalCity(parts[3],parts[1]);
+  return parts.join("|");
+}
+export function alertCounts(events:StoredEvent[]){
+  const groups=groupAlerts(events);return {count:groups.length,concerts:groups.filter(g=>g.status==="listed").length,possibilities:groups.filter(g=>g.status==="unverified").length};
+}
 export function renderAlert(id:string,events:StoredEvent[],website:string){
-  const groups=groupAlerts(events),listed=groups.filter(g=>g.status==="listed"),rumors=groups.filter(g=>g.status!=="listed");
-  const lines=[`RockShowBot — ${listed.length} show(s) com data e ${rumors.length} possibilidade(s) nova(s).`,"","Somente informações ainda não notificadas. Datas diferentes do mesmo artista são shows distintos."];
-  for(const [title,items] of [["SHOWS COM DATA — fonte oficial ou provedor de eventos",listed],["POSSIBILIDADES — NÃO VERIFICADO",rumors]] as const){
-    if(!items.length)continue;lines.push("",title);
-    for(const item of items){const date=item.date?item.date.split("-").reverse().join("/"):"sem data confirmada";lines.push(`- ${item.status==="listed"?"":"NÃO VERIFICADO — "}${date} — ${item.artists.join(" + ")} — ${item.city?item.city+" / ":""}${COUNTRY_NAMES[item.country]||item.country}`,`  ${item.source}: ${item.url}`);}
-  }
+  const statuses=new Set(events.map(event=>event.status));
+  if(!events.length||statuses.size!==1||!['listed','unverified'].includes(events[0].status))throw new Error("Separe shows confirmados e rumores antes de preparar o e-mail.");
+  const groups=groupAlerts(events),confirmed=events[0].status==="listed";
+  const lines=[confirmed?`RockShowBot — ${groups.length} show(s) confirmado(s).`:`RockShowBot — ${groups.length} possibilidade(s) NÃO CONFIRMADA(S).`,"","Somente informações ainda não notificadas. Datas diferentes do mesmo artista são shows distintos.","",confirmed?"SHOWS CONFIRMADOS — fonte oficial ou provedor de eventos":"RUMORES E ANTECIPAÇÕES — NÃO CONFIRMADOS"];
+  for(const item of groups){const date=item.date?item.date.split("-").reverse().join("/"):"sem data confirmada";lines.push(`- ${confirmed?"":"NÃO CONFIRMADO — "}${date} — ${item.artists.join(" + ")} — ${item.city?item.city+" / ":""}${COUNTRY_NAMES[item.country]||item.country}`,`  ${item.source}: ${item.url}`);}
   lines.push("",`Abrir o RockShowBot: ${website}`,`ID do resumo: ${id}`);
-  return {subject:`RockShowBot: ${groups.length} novidade(s) [RSB-${id}]`,body:lines.join("\n"),count:groups.length,concerts:listed.length,possibilities:rumors.length};
+  return {subject:`RockShowBot: ${groups.length} ${confirmed?"show(s) confirmado(s)":"possibilidade(s) não confirmada(s)"} [RSB-${id}]`,body:lines.join("\n"),...alertCounts(events)};
 }

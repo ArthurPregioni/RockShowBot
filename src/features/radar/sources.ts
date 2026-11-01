@@ -17,7 +17,12 @@ export function officialURL(value:string, base?:string) {
   } catch {return null;}
 }
 export function isJournalism(source:string,url:string) {
-  if(/flesch/i.test(source))return true;
-  try { const parsed=new URL(url);return /(^|\.)(x\.com|twitter\.com|instagram\.com|youtube\.com|youtu\.be)$/.test(parsed.hostname); }
+  if(/flesch|billboard|cooperativa|rolling stone|\bciudad\b|\bindy\b/i.test(source))return true;
+  try { const parsed=new URL(url);return /(^|\.)(x\.com|twitter\.com|instagram\.com|youtube\.com|youtu\.be|billboard\.ar|billboard\.com|cooperativa\.cl|ciudad\.com\.ar|indy\.com\.ar)$/.test(parsed.hostname); }
   catch{return false;}
+}
+
+export function findingStatus(status:string,date:string,source:string,url:string){
+  if(status==="reported"||date&&status==="listed"&&isJournalism(source,url))return "reported";
+  return status==="listed"&&date?"listed":"unverified";
 }

@@ -63,3 +63,11 @@ A aplicação Python mantém e evolui seu esquema SQLite em `selfhosted/rockshow
 ## Dependências de terceiros
 
 A licença do código do projeto é MIT. A infraestrutura vendorizada do Sites mantém sua licença em `tooling/sites/vite/sites-vite-plugin.LICENSE`. Bibliotecas instaladas e serviços consultados conservam suas próprias licenças e condições de acesso. A licença do bot não redistribui credenciais nem concede direitos sobre o conteúdo dos provedores.
+
+### Separação das evidências e dos e-mails
+
+`listed` significa show com data sustentada por fonte primária. `reported` identifica um anúncio publicado pela imprensa que ainda aguarda a página primária: aparece no filtro **Anunciados na imprensa**, sem gerar e-mail. `unverified` fica reservado a rumores e antecipações. Encontrar a fonte primária de um anúncio já notificado não reativa seu aviso.
+
+Cada resumo contém somente shows confirmados ou somente rumores; o servidor recusa misturá-los. Shows têm prioridade, e a próxima preparação pode produzir o resumo separado de rumores. Atualizações de fonte, título ou URL não criam um show novo. A identidade considera artista, país, data e cidade normalizada, incluindo Santiago/Santiago Centro no Chile; datas e cidades diferentes continuam distintas. Recibos antigos são consultados com essa normalização. O recibo compartilhado da página também evita avisar novamente ao importar outro integrante do mesmo show.
+
+Antes de reservar um resumo, o servidor confere novamente os recibos, a categoria e o conteúdo. Resumos pendentes que mudaram são cancelados e preparados novamente. Envios já reservados ou de resultado desconhecido preservam o conteúdo original e exigem reconciliação com o Gmail. Nenhum e-mail é enviado pelos testes locais.
