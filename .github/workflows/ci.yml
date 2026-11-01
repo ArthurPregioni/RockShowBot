@@ -57,15 +57,28 @@ jobs:
       - run: npm run test:browser
       - name: Verify delivery flow with a local database and no email
         run: |
-          npm run dev > /tmp/rockshowbot-preview.log 2>&1 &
+          npm run dev -- --host 127.0.0.1 > /tmp/rockshowbot-preview.log 2>&1 &
           preview_pid=$!
-          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          cleanup_preview() {
+            result=$?
+            kill "$preview_pid" 2>/dev/null || true
+            if [ "$result" -ne 0 ]; then
+              cat /tmp/rockshowbot-preview.log
+            fi
+          }
+          trap cleanup_preview EXIT
           node --input-type=module -e '
             const until = Date.now() + 90000;
             while (true) {
               try {
-                const r = await fetch("http://localhost:5173/signin-with-chatgpt?return_to=/");
-                if (r.ok) break;
+                // Node fetch has no cookie jar: following the login redirect loops.
+                // The local auth middleware is ready when it sets the session cookie.
+                const r = await fetch("http://127.0.0.1:5173/signin-with-chatgpt?return_to=/", {
+                  redirect: "manual",
+                  signal: AbortSignal.timeout(5000),
+                });
+                if (r.status === 302 && r.headers.get("location") === "/" &&
+                    r.headers.get("set-cookie")?.startsWith("__sites_local_auth=")) break;
               } catch {}
               if (Date.now() > until) throw new Error("Local preview did not become ready");
               await new Promise(resolve => setTimeout(resolve, 1000));
