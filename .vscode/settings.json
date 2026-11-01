@@ -11,6 +11,7 @@
     "**/*.db": true,
     "**/dist": true,
     "**/__pycache__": true,
-    "**/*.tsbuildinfo": true
+    "**/*.tsbuildinfo": true,
+    "**/next-env.d.ts": true
   }
 }

@@ -3,7 +3,9 @@
 O repositório contém duas aplicações independentes. O painel web usa React/Vinext, Workers e D1 no Sites. O servidor `selfhosted/` usa Python, SQLite e SMTP, com uma interface própria. Cada instalação tem um único radar compartilhado por seus administradores; não há isolamento entre múltiplos usuários dentro da mesma instância.
 
 ```text
+config/                    configurações de Vite, PostCSS, ESLint e Drizzle
 src/
+  types/                   declarações de ambiente e serviços de hospedagem
   app/                     páginas e rotas HTTP do painel web
   components/              interface usada pelo painel
   core/                    regras de eventos, preferências e configuração
@@ -32,7 +34,7 @@ tests/                     web, navegador, integração e Python
 tooling/sites/             infraestrutura de build, preview e publicação
 ```
 
-As configurações Node/Vite/TypeScript e `render.yaml` ficam na raiz para serem descobertas pelas ferramentas. `.openai/hosting.example.json` descreve apenas os bindings genéricos; `.openai/hosting.json` guarda a identidade local da instalação e é ignorado. Builds, bancos, dependências, tokens e preferências de ferramentas ficam fora do Git.
+As configurações de build, CSS, lint e migrações ficam em `config/`. `vite.config.mjs` e `eslint.config.mjs` são entradas mínimas para a descoberta automática das ferramentas e do editor. `package.json`, seu lockfile, `tsconfig.json` e `render.yaml` permanecem na raiz por convenção das ferramentas. As declarações de ambiente ficam em `src/types/`. `next-env.d.ts` é gerado automaticamente pelo framework na raiz, é ignorado pelo Git e fica oculto no explorador do VS Code; não deve ser movido nem editado manualmente. `.openai/hosting.example.json` descreve apenas os bindings genéricos; `.openai/hosting.json` guarda a identidade local da instalação e é ignorado. Builds, bancos, dependências, tokens e preferências de ferramentas ficam fora do Git.
 
 ## Fluxo do painel web
 

@@ -115,3 +115,12 @@ Os arquivos na raiz são configurações das ferramentas e documentação de ent
 - [Reportar vulnerabilidades](SECURITY.md)
 
 As fontes podem ter cobertura parcial, mudar de formato ou bloquear coleta. Rumores permanecem identificados como não verificados até haver evidência oficial. YouTube Music ainda não tem importação da biblioteca de artistas.
+
+## Organização do código
+
+- `src/`: painel, servidor web, regras do radar e tipos em `src/types/`.
+- `config/`: configurações de Vite, ESLint, PostCSS e Drizzle.
+- `selfhosted/`: servidor Python independente.
+- `extensions/`, `deploy/`, `scripts/`, `tests/` e `docs/`: extensão, hospedagem, utilitários, QA e documentação.
+
+As entradas mínimas `vite.config.mjs` e `eslint.config.mjs` ficam na raiz para descoberta automática. O mapa completo está em [arquitetura](docs/architecture.md).

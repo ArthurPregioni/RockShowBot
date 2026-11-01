@@ -1,10 +1,11 @@
 import vinext from "vinext";
+import postcss from "./postcss.mjs";
 import { defineConfig } from "vite";
 import { existsSync, readFileSync } from "node:fs";
-import { readExecutionProfile } from "./tooling/sites/execution-profile.mjs";
-import { configureToolEnvironment } from "./tooling/sites/tool-environment.mjs";
-import { sites } from "./tooling/sites/vite/sites-vite-plugin.ts";
-import { connectorPreview } from "./tooling/sites/vite/connector-preview-plugin.mjs";
+import { readExecutionProfile } from "../tooling/sites/execution-profile.mjs";
+import { configureToolEnvironment } from "../tooling/sites/tool-environment.mjs";
+import { sites } from "../tooling/sites/vite/sites-vite-plugin.ts";
+import { connectorPreview } from "../tooling/sites/vite/connector-preview-plugin.mjs";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
@@ -50,6 +51,7 @@ export default defineConfig(async ({ command }) => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    css: { postcss },
     server: {
       ...(managedLinux
         ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] }
@@ -85,7 +87,7 @@ export default defineConfig(async ({ command }) => {
                 {
                   config: {
                     name: "sites-connector-preview",
-                    main: "./tooling/sites/connector-preview/worker.mjs",
+                    main: "../tooling/sites/connector-preview/worker.mjs",
                     compatibility_date: "2026-05-15",
                   },
                 },

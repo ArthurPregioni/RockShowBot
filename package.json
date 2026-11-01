@@ -11,7 +11,7 @@
     "build": "node scripts/package-extension.mjs && node tooling/sites/run-framework.mjs build",
     "start": "node --import ./tooling/sites/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "drizzle-kit generate --config config/drizzle.ts",
     "extension:build": "node scripts/package-extension.mjs",
     "test:web": "node --experimental-strip-types --test tests/web/*.test.mjs",
     "test:python": "python3 -m unittest discover -s tests/selfhosted -v",
