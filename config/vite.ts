@@ -1,5 +1,5 @@
 import vinext from "vinext";
-import postcss from "./postcss.mjs";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import { existsSync, readFileSync } from "node:fs";
 import { readExecutionProfile } from "../tooling/sites/execution-profile.mjs";
@@ -51,7 +51,7 @@ export default defineConfig(async ({ command }) => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
-    css: { postcss },
+    css: { postcss: fileURLToPath(new URL(".", import.meta.url)) },
     server: {
       ...(managedLinux
         ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] }
