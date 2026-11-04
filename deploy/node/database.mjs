@@ -33,6 +33,6 @@ class Statement {
   bind(...values){return new Statement(this.connection,this.sql,values.map(v=>v===undefined?null:v));}
   async first(column){const row=this.connection.prepare(this.sql).get(...this.values);return row?(column?row[column]:{...row}):null;}
   async all(){return {success:true,results:this.connection.prepare(this.sql).all(...this.values).map(r=>({...r})),meta:{}};}
-  execute(){const result=this.connection.prepare(this.sql).run(...this.values);return {success:true,results:[],meta:{changes:Number(result.changes),last_row_id:Number(result.lastInsertRowid)}};}
+  execute(){const statement=this.connection.prepare(this.sql);if(statement.columns().length)return {success:true,results:statement.all(...this.values).map(row=>({...row})),meta:{changes:0}};const result=statement.run(...this.values);return {success:true,results:[],meta:{changes:Number(result.changes),last_row_id:Number(result.lastInsertRowid)}};}
   async run(){return this.execute();}
 }

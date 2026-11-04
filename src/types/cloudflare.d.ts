@@ -9,3 +9,7 @@ declare namespace Cloudflare {
     PREDICTHQ_API_KEY?: string;
   }
 }
+
+interface ImportMetaEnv {
+  readonly ROCKSHOWBOT_STANDALONE?: string;
+}

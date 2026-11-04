@@ -1,11 +1,11 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-export function startScheduler({port,token,database}){
- let busy=false;
+export function startScheduler({port,token,database,accounts,localDatabase}){
+ let busy=false,currentOwner="local-owner";
  database.exec('CREATE TABLE IF NOT EXISTS node_jobs(slot TEXT PRIMARY KEY,status TEXT NOT NULL,started_at TEXT DEFAULT CURRENT_TIMESTAMP,finished_at TEXT)');
  const api=async(action,body)=>{
-  const response=await fetch(`http://127.0.0.1:${port}/api/automation/${action}`,{headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/json'}:{})},...(body?{method:'POST',body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(240000)});
+  const response=await fetch(`http://127.0.0.1:${port}/api/automation/${action}`,{headers:{Authorization:`Bearer ${token}`,"x-rockshowbot-owner":currentOwner,...(body?{'Content-Type':'application/json'}:{})},...(body?{method:'POST',body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(240000)});
   const data=await response.json();if(!response.ok)throw new Error(`${action}: ${data.error||response.status}`);return data;
  };
  const send=message=>new Promise((resolve,reject)=>{
@@ -33,10 +33,13 @@ export function startScheduler({port,token,database}){
  async function tick(){
   if(busy)return;busy=true;
   try{
+   for(const account of accounts.list()){
+   currentOwner=account.id;
+   const userdb=localDatabase(account.id);userdb.migrate(new URL('../../drizzle',import.meta.url).pathname);
    const now=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
    const part=name=>now.find(p=>p.type===name)?.value;
    if(['09','21'].includes(part('hour'))){
-    const slot=['scan',part('year'),part('month'),part('day'),part('hour')].join('-');
+    const slot=['scan',account.id,part('year'),part('month'),part('day'),part('hour')].join('-');
     if(database.prepare("INSERT OR IGNORE INTO node_jobs(slot,status) VALUES(?,'running')").run(slot).changes){
      try{for(const action of ['sources/scan','scan']){let offset=0;do{const result=await api(action,{offset});offset=result.nextOffset;}while(offset!==null);}
       database.prepare("UPDATE node_jobs SET status='done',finished_at=CURRENT_TIMESTAMP WHERE slot=?").run(slot);
@@ -44,6 +47,7 @@ export function startScheduler({port,token,database}){
     }
    }
    await mail();
+   }
   }catch(error){console.error('Rotina local:',error.message);}finally{busy=false;}
  }
  database.prepare("INSERT INTO bot_settings(id,schedule) VALUES(1,'active') ON CONFLICT(id) DO UPDATE SET schedule='active'").run();

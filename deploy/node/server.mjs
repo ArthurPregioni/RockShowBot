@@ -3,6 +3,7 @@ import {parseEnv} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
+import {accountStore,accountHTML} from './accounts.mjs';
 import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML} from './session.mjs';
 
 if(process.env.ROCKSHOWBOT_ENV_FILE){const values=parseEnv(readFileSync(process.env.ROCKSHOWBOT_ENV_FILE,'utf8'));for(const [key,value]of Object.entries(values))process.env[key]=value;}
@@ -14,8 +15,9 @@ if(!encoded)throw new Error('Configure APP_PASSWORD_HASH ou uma APP_PASSWORD com
 const origin=new URL(process.env.ROCKSHOWBOT_SITE_ORIGIN||'http://127.0.0.1:8765');
 if(origin.protocol!=='https:'&&!(origin.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(origin.hostname)))throw new Error('Use HTTPS para acesso externo.');
 process.env.ROCKSHOWBOT_SITE_ORIGIN=origin.origin;
-const {localDatabase}=await import('./runtime.mjs');
+const {localDatabase,runForOwner}=await import('./runtime.mjs');
 const binding=localDatabase();binding.migrate(path.join(root,'drizzle'));
+const accounts=accountStore(binding.connection);accounts.initialize(username,process.env.ADMIN_EMAIL||`${username}@localhost`,encoded);
 const sessions=sessionStore(binding.connection),attempts=new Map();
 const schedulerToken=randomBytes(32).toString('hex');
 const {startProdServer}=await import('vinext/server/prod-server');
@@ -30,7 +32,9 @@ server.on('request',async(req,res)=>{
   // Strip identity asserted by callers before adding this server's verified owner.
   for(const key of Object.keys(req.headers))if(key.startsWith('oai-authenticated-user-'))delete req.headers[key];
   const token=cookies(req.headers.cookie)[sessionCookie],owner=sessions.find(token);
+  let account=owner?accounts.find(owner):null;
   const internal=req.headers.authorization===`Bearer ${schedulerToken}`&&['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  if(internal)account=accounts.byId(req.headers['x-rockshowbot-owner']||'local-owner');
   if(url.pathname==='/healthz'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({app:'RockShowBot',backend:'node',ok:true}));return;}
   if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!internal){
    const allowed=new Set([origin.origin,`http://127.0.0.1:${port}`,`http://localhost:${port}`]);
@@ -49,22 +53,46 @@ server.on('request',async(req,res)=>{
    attempts.set(key,bucket);if(bucket.count>=10){html(res,429,loginHTML('Muitas tentativas. Aguarde dez minutos.'));return;}
    let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}
    const form=new URLSearchParams(body);bucket.count++;
-   if(form.get('username')!==username||!await verifyPassword(form.get('password')||'',encoded)){html(res,401,loginHTML('Usuário ou senha incorretos.',form.get('return_to')));return;}
-   attempts.delete(key);redirect(res,safeReturn(form.get('return_to')),cookie(sessions.create(username)));return;
+   const candidate=accounts.find(form.get('username')||'');
+   if(!candidate||!await verifyPassword(form.get('password')||'',candidate.password_hash)){html(res,401,loginHTML('Usuário ou senha incorretos.',form.get('return_to')));return;}
+   attempts.delete(key);redirect(res,safeReturn(form.get('return_to')),cookie(sessions.create(candidate.username)));return;
   }
-  if(!owner&&!internal){
+  if(!account){
    if(url.pathname.startsWith('/api/')){res.writeHead(401,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'Entre na sua conta para continuar.'}));}
    else redirect(res,'/login?return_to='+encodeURIComponent(safeReturn(req.url)));
    return;
   }
-  req.headers['oai-authenticated-user-id']='local-owner';
-  req.headers['oai-authenticated-user-email']=process.env.ADMIN_EMAIL||`${username}@localhost`;
-  req.headers['oai-authenticated-user-full-name']=encodeURIComponent(process.env.ADMIN_NAME||username);
+  if(['/account','/admin/users','/account/password'].includes(url.pathname)){
+   if(url.pathname==='/admin/users'&&account.role!=='admin'){html(res,403,'Acesso restrito ao administrador.');return;}
+   let notice='';
+   if(req.method==='POST'){
+    let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}
+    const form=new URLSearchParams(body);
+    try{
+     if(url.pathname==='/admin/users'){
+      const created=await accounts.create(form.get('username')||'',form.get('email')||'');
+      const userdb=localDatabase(created.id);userdb.migrate(path.join(root,'drizzle'));
+      userdb.connection.prepare('INSERT INTO bot_settings(id,email,notifications,countries,schedule) VALUES(1,?,0,?,?)').run(form.get('email'),'["BR"]',process.env.ROCKSHOWBOT_SCHEDULER==='true'?'active':'pending');
+      notice=`Conta criada. Compartilhe estas credenciais com a pessoa por um canal privado.\nUsuário: ${created.username}\nSenha inicial: ${created.password}\nA senha pode ser alterada na página Conta.`;
+     }else if(url.pathname==='/account/password'){
+      if(!await verifyPassword(form.get('current')||'',account.password_hash))throw new Error('Senha atual incorreta.');
+      await accounts.changePassword(account.id,form.get('password')||'');
+      binding.connection.prepare('DELETE FROM node_sessions WHERE username=?').run(account.username);
+      redirect(res,'/login',cookie('',true));return;
+     }
+    }catch(error){html(res,400,accountHTML(accounts.list(),account.role==='admin',error.message));return;}
+   }
+   html(res,200,accountHTML(accounts.list(),account.role==='admin',notice));return;
+  }
+  req.headers['oai-authenticated-user-id']=account.id;
+  req.headers['oai-authenticated-user-email']=account.email;
+  req.headers['oai-authenticated-user-full-name']=encodeURIComponent(account.username);
   req.headers['oai-authenticated-user-full-name-encoding']='percent-encoded-utf-8';
-  for(const handler of handlers)handler.call(server,req,res);
+  localDatabase(account.id).migrate(path.join(root,'drizzle'));
+  runForOwner(account.id,()=>{for(const handler of handlers)handler.call(server,req,res);});
  }catch(error){console.error('Request failed:',error.name);if(!res.headersSent)html(res,500,'Não foi possível concluir. Tente novamente.');else res.destroy();}
 });
 console.log(`RockShowBot com login ativo em http://${process.env.HOST||'127.0.0.1'}:${port}`);
 if(process.env.ROCKSHOWBOT_SCHEDULER==='true'){
- const {startScheduler}=await import('./scheduler.mjs');startScheduler({port,token:schedulerToken,database:binding.connection});
+ const {startScheduler}=await import('./scheduler.mjs');startScheduler({port,token:schedulerToken,database:binding.connection,accounts,localDatabase});
 }

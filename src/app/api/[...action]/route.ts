@@ -38,6 +38,11 @@ async function handle(request: Request, context: {params: Promise<{action:string
     }
     if (request.method === "GET") {
       if (action.startsWith("music/")) return await musicAction(request,action,{},user!.userId,originFor(request));
+      if (action === "automation/migration/export") {
+        const tables=["watch_artists","show_events","bot_settings","alert_receipts","alert_deliveries","preference_confirmations","scan_runs"];
+        const snapshot=await database().batch(tables.map(table=>database().prepare(`SELECT * FROM ${table} ORDER BY rowid`)));
+        return json({format:"rockshowbot-web-sqlite-v1",exportedAt:new Date().toISOString(),tables:Object.fromEntries(tables.map((table,index)=>[table,snapshot[index].results]))});
+      }
       if (action === "automation/alerts/history") return json({deliveries:await alertHistory()});
       if (action === "automation/confirmations") return json({confirmations:await pendingConfirmations()});
       if (action === "dashboard") return json(await dashboard());

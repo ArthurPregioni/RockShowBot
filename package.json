@@ -23,9 +23,10 @@
     "check:repo": "python3 scripts/check-public-repo.py",
     "db:migrate:local": "node --import ./tooling/sites/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply DB --local --config dist/server/wrangler.json --persist-to .wrangler/state",
     "start:python": "python3 -m selfhosted.rockshowbot",
-    "build:node": "node scripts/package-extension.mjs && vite build --config config/node.ts",
+    "build:node": "node scripts/package-extension.mjs && vite build --config config/node.ts && node scripts/package-node.mjs",
     "start:node": "node deploy/node/server.mjs",
-    "test:node": "node --test tests/node/*.test.mjs"
+    "test:node": "node --test tests/node/*.test.mjs",
+    "test:node:integration": "node tests/integration/node-server.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
