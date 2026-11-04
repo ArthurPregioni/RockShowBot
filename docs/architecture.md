@@ -1,6 +1,6 @@
 # Arquitetura e organização
 
-O repositório contém duas aplicações independentes. O painel web usa React/Vinext, Workers e D1 no Sites. O servidor `selfhosted/` usa Python, SQLite e SMTP, com uma interface própria. Cada instalação tem um único radar compartilhado por seus administradores; não há isolamento entre múltiplos usuários dentro da mesma instância.
+O painel React/Vinext tem dois destinos: Workers/D1 no Sites e Node/SQLite em infraestrutura própria. O destino Node acrescenta login próprio e bancos separados por conta. O servidor `selfhosted/` usa Python, SQLite e SMTP, com uma interface própria. Cada instalação tem um único radar compartilhado por seus administradores; não há isolamento entre múltiplos usuários dentro da mesma instância.
 
 ```text
 .github/                   contribuição, segurança, templates e integração contínua
@@ -87,3 +87,9 @@ A licença do código do projeto é MIT. A infraestrutura vendorizada do Sites m
 Cada resumo contém somente shows confirmados ou somente rumores; o servidor recusa misturá-los. Shows têm prioridade, e a próxima preparação pode produzir o resumo separado de rumores. Atualizações de fonte, título ou URL não criam um show novo. A identidade considera artista, país, data e cidade normalizada, incluindo Santiago/Santiago Centro no Chile; datas e cidades diferentes continuam distintas. Recibos antigos são consultados com essa normalização. O recibo compartilhado da página também evita avisar novamente ao importar outro integrante do mesmo show.
 
 Antes de reservar um resumo, o servidor confere novamente os recibos, a categoria e o conteúdo. Resumos pendentes que mudaram são cancelados e preparados novamente. Envios já reservados ou de resultado desconhecido preservam o conteúdo original e exigem reconciliação com o Gmail. Nenhum e-mail é enviado pelos testes locais.
+
+## Destino Node nativo
+
+`config/node.ts` compila o painel sem o plugin Cloudflare e resolve a interface D1 para `deploy/node/runtime.mjs`. O adaptador usa SQLite nativo, mantém transações de lote e aplica as migrações existentes. `AsyncLocalStorage` vincula o banco ao usuário autenticado, inclusive em requisições concorrentes; cabeçalhos de identidade do cliente são descartados. Contas e hashes de sessão ficam no banco do administrador, e os radares de outras contas ficam em arquivos distintos. O agendador local consulta cada conta por uma autorização interna efêmera, sem expor essa autorização ao navegador.
+
+O transporte SMTP só confirma recibos após aceitação pelo servidor do provedor. Resultados incertos bloqueiam o reenvio automático. O artefato produzido por `npm run build:node` inclui um entrypoint que exige autenticação; código e configuração permanecem separados. Veja o [guia Termux](guides/termux.md).

@@ -20,6 +20,7 @@ Para o painel web, use Node.js 22.13+ e `npm ci`. Para Python, use Python 3.10+;
 | Nova fonte oficial | `src/features/radar/catalog.json` e, se necessário, `discovery.ts` |
 | Confirmação de preferências | `src/features/preferences/` |
 | Autenticação e orquestração | `src/server/` |
+| Hospedagem nativa, contas e SQLite | `deploy/node/`, `config/node.ts` |
 | Aplicação independente | `selfhosted/` |
 | Banco do painel | `src/db/schema.ts` e nova migração em `drizzle/` |
 
@@ -55,3 +56,5 @@ Use os arquivos de exemplo. `.env`, `.dev.vars`, bancos, chaves, tokens e `.open
 ## Licenças
 
 Mantenha o aviso MIT e as licenças de código de terceiros que redistribuir. Não adicione músicas, imagens, logos ou bases de eventos sem direito de redistribuição. Configurar uma fonte no catálogo não implica afiliação com o provedor. Cada operador deve usar suas próprias contas e cumprir as condições de acesso dos serviços que escolher.
+
+Para alterações no destino Node/Termux, rode `npm run test:node`, `npm run build:node` e `npm run test:node:integration`. O teste integrado cria servidor e bancos temporários próprios, cobre isolamento entre contas e não configura SMTP.

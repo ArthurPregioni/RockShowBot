@@ -34,7 +34,7 @@ try{
  assert.equal(created.status(),200);const password=(await created.text()).match(/Senha inicial: ([A-Za-z0-9_-]+)/)?.[1];assert.ok(password);
  await login(other,'guest'+stamp,password);
  const theirs=await(await api(other,'/api/dashboard')).json();assert.equal(theirs.artists.length,0);assert.equal(theirs.settings.email,'guest@example.test');
- await api(other,'/admin/users',undefined,403);
+ await api(other,'/admin/users',undefined,403);await api(other,'/admin/email',undefined,403);
  const own=await(await api(owner,'/api/dashboard')).json();const privateBand=own.artists.find(a=>a.name===band);assert.ok(privateBand);
  await api(other,'/api/artists/remove',{id:privateBand.id});assert.ok((await(await api(owner,'/api/dashboard')).json()).artists.some(a=>a.id===privateBand.id));
  const prepared=await(await api(other,'/api/music/browser/prepare',{captureFormat:2,provider:'apple',artists:[{name:'Guest private artist '+stamp}]})).json();

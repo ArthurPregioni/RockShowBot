@@ -3,7 +3,7 @@
 ## Instalar e usar
 
 - [Servidor Python: instalação, SMTP, Docker, Compose e Render](guides/standalone.md)
-- [Android/Termux: preparação, operação e plano de migração](guides/termux.md)
+- [Painel completo no Android/Termux: login, contas e operação](guides/termux.md)
 - [Painel web: hospedagem Sites e tarefas em nuvem](guides/sites.md)
 - [Usar o painel](guides/using.md)
 - [Apple Music, Spotify e outros serviços de música](guides/music-services.md)
@@ -16,4 +16,4 @@
 - [Política de segurança](../.github/SECURITY.md)
 - [Licença MIT](../LICENSE)
 
-O [README principal](../README.md) compara as duas aplicações. Os guias usam comandos a partir da raiz do repositório e domínios de exemplo; configure os valores da sua instalação. O CSV em `docs/examples/artistas-exemplo.csv` é uma alternativa apenas no servidor Python.
+O [README principal](../README.md) compara os destinos de hospedagem. Os guias usam comandos a partir da raiz do repositório e domínios de exemplo; configure os valores da sua instalação. O CSV em `docs/examples/artistas-exemplo.csv` é uma alternativa apenas no servidor Python.

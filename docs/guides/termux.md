@@ -1,147 +1,116 @@
-# Preparar um Android com Termux
+# Painel completo no Android/Termux
 
-Este preset prepara o **servidor Python independente** para funcionar no Termux nativo, sem root, Docker, proot ou instalação Node. Ele instala somente os arquivos do RockShowBot. O perfil inicial usa `127.0.0.1:8765`, senha gerada no aparelho e dados fora do checkout, para conviver com outros serviços no celular.
+O painel React pode rodar em **Node nativo com SQLite**, mantendo as telas, a extensão Apple Music/Spotify, o catálogo ampliado e as regras de consolidação e recibos. Esse destino usa o mesmo código do radar e substitui os serviços D1 e de autenticação do Sites por adaptadores locais. O [servidor Python alternativo](termux-python.md) continua disponível, com menos recursos.
 
-**Estado da migração:** esta preparação não transfere o painel Sites, os dados da nuvem ou as tarefas Gmail. O backend Python tem recursos diferentes. Antes de trocar a instância principal, siga a seção de migração ao fim deste guia. A hospedagem atual continua operando até a troca ser executada deliberadamente.
+O destino Node tem uma tela de login, sessões revogáveis e contas separadas. Cada pessoa tem seu banco de artistas, países, preferências e histórico. O administrador cria contas em **Conta → Criar conta**, entrega a senha inicial por um canal privado e pode configurar um remetente SMTP comum. A pessoa pode alterar a própria senha; o e-mail de alertas é individual. O operador do aparelho continua tendo acesso aos arquivos dos bancos.
 
-## 1. Preparar o Motorola One Fusion+ ou outro Android
+## Preparar o artefato no computador
 
-Instale Termux e Termux:Boot pela mesma origem, seguindo as [instruções oficiais de instalação](https://github.com/termux/termux-app#installation). Plugins e aplicativo principal precisam ter assinaturas compatíveis. **Abra o Termux:Boot uma vez** para habilitar sua execução após reiniciar, conforme o [guia oficial](https://github.com/termux/termux-boot#how-to-use).
-
-No Termux:
+Use Node 22.13+ com `node:sqlite` disponível. O build é feito no computador para evitar instalar Vite, workerd ou um ambiente de compilação no celular.
 
 ```sh
-pkg update
-pkg install git python termux-services nano
-mkdir -p ~/apps
-git clone https://github.com/ArthurPregioni/RockShowBot.git ~/apps/rockshowbot
-cd ~/apps/rockshowbot
-python deploy/termux/manage.py install
+npm ci
+npm run test:node
+npm run build:node
+npm run test:node:integration
+tar -czf /tmp/rockshowbot-web.tar.gz -C dist/standalone .
 ```
 
-Se já clonou nesse caminho, use sua cópia existente. O instalador não inicia buscas nem envia mensagens. Ele gera uma senha administrativa aleatória e deixa o serviço parado até você configurá-lo e executar `rockshowbot start`. Reexecutar `install` preserva a configuração, os dados e o estado de ativação.
+`dist/standalone` inclui o painel compilado, as dependências de execução e os scripts de operação. Sua entrada `server.js` exige login. Ele não inclui banco, `.env`, chaves ou credenciais da instalação. Não use o artefato da hospedagem Sites no Android: esse destino depende de Workers/D1.
 
-`termux-services` fornece supervisão por runit. Se houver problema com o supervisor, reabra o Termux após instalar o pacote, como orienta sua [documentação](https://github.com/termux/termux-services).
+## Instalar no Termux
 
-## 2. Configurar
+Instale Termux seguindo as instruções da distribuição escolhida. No aparelho, são necessários:
 
 ```sh
-nano ~/.config/rockshowbot/server.env
+pkg install nodejs-lts python openssh termux-services
 ```
 
-A senha gerada está em `APP_PASSWORD`; use-a para entrar no painel com `APP_USER=admin`. O arquivo tem permissão restrita ao usuário do Termux. Trate-o como configuração de dados: `CHAVE=valor`, com aspas para valores com espaços ou `#`. Não há execução de comandos nem expansão de variáveis nesse arquivo.
-
-Preencha os provedores e SMTP que vai usar:
-
-```dotenv
-TICKETMASTER_API_KEY=
-PREDICTHQ_API_KEY=
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USERNAME=
-SMTP_PASSWORD=
-SMTP_FROM="RockShowBot <voce@example.com>"
-SMTP_STARTTLS=true
-```
-
-Para buscas reais nesta versão, configure Ticketmaster ou PredictHQ. Sem eles, a interface aceita artistas e dicas manuais. SMTP vazio mantém os alertas pendentes. Depois de configurar SMTP, salve o e-mail de destino no painel. Os detalhes estão no [guia do servidor Python](standalone.md).
-
-A porta padrão é **8765**. Pode mudá-la em `PORT` se outro serviço já a usar. `DATABASE_PATH` é gerenciado pelo preset; fica fixo no diretório persistente da aplicação. O agendador Python consulta os provedores a cada `SCAN_INTERVAL_HOURS` horas; a primeira busca automática ocorre depois desse intervalo. Também é possível iniciar uma busca pelo painel.
-
-## 3. Iniciar e operar
+Copie o artefato para o aparelho pelo USB/SSH e extraia-o em uma pasta própria:
 
 ```sh
-rockshowbot doctor
-rockshowbot start
+mkdir -p ~/apps/rockshowbot-web
+tar -xzf ~/rockshowbot-web.tar.gz -C ~/apps/rockshowbot-web
+bash ~/apps/rockshowbot-web/deploy/termux/install-web.sh
 ```
 
-No navegador **do celular**, abra <http://127.0.0.1:8765>. O login usa a senha do arquivo privado. `doctor` mostra modelo, versão do Android e arquitetura detectados no aparelho, caminhos, estado do serviço e se SMTP/fontes foram configurados. Ele não imprime senhas, tokens ou chaves.
+A instalação gera `~/.config/rockshowbot/node.env` e `login.txt`, ambos privados. A senha inicial fica em `login.txt`; seu hash fica na configuração. Reexecutar o instalador preserva a configuração. Não publique nenhum desses arquivos.
 
 ```sh
-rockshowbot status
-rockshowbot logs
-rockshowbot restart
-rockshowbot stop
+export SVDIR="$PREFIX/var/service"
+export LOGDIR="$PREFIX/var/log"
+service-daemon start
+sv-enable rockshowbot-web
+sv -w 20 up "$SVDIR/rockshowbot-web"
 ```
 
-`restart` aplica mudanças na configuração. `stop` também desabilita a inicialização automática do RockShowBot; `start` a habilita novamente. Falhas do processo são supervisionadas pelo runit. Os logs têm rotação de aproximadamente 1 MiB por arquivo, com cinco arquivos anteriores.
+Na primeira inicialização do supervisor, aguarde a criação de `rockshowbot-web/supervise/ok` antes de chamar `sv`. Abra `http://127.0.0.1:8765` no aparelho e entre com as credenciais geradas.
 
-O comando `run` é a entrada interna do supervisor; não é necessário executá-lo manualmente. A instalação recusa sobrescrever um serviço homônimo que não tenha sido criado por este preset.
+## Acesso fora de casa
 
-## 4. Funcionamento após reiniciar e com a tela apagada
+O servidor escuta em loopback. Para acesso externo, coloque-o atrás de HTTPS. Um túnel temporário gratuito permite começar sem abrir portas no roteador:
 
-O instalador cria somente `~/.termux/boot/50-rockshowbot`, respeitando outros scripts de boot. Quando o serviço estiver habilitado e o Termux:Boot executar, esse arquivo chama o gerenciador para iniciar a aplicação. Se você usou `rockshowbot stop`, o script não a inicia no próximo boot.
+```sh
+pkg install cloudflared
+bash ~/apps/rockshowbot-web/deploy/termux/install-tunnel.sh
+sv -w 20 up "$SVDIR/rockshowbot-tunnel"
+cat ~/.config/rockshowbot/public-url.txt
+```
 
-Com `WAKE_LOCK=true`, iniciar o serviço solicita `termux-wake-lock`, mecanismo previsto no [guia Termux:Boot](https://github.com/termux/termux-boot#how-to-use). Você pode desativar essa solicitação na configuração. Parar o RockShowBot não libera o wake lock global, porque outros serviços do celular podem precisar dele. Quando todos os serviços estiverem parados e quiser liberar o lock, use `termux-wake-unlock`.
+O túnel cria um endereço `https://...trycloudflare.com`. O helper atualiza `ROCKSHOWBOT_SITE_ORIGIN` e reinicia somente o painel quando o endereço muda. **Esse endereço muda quando o processo do túnel reinicia**, inclusive após reboot. Para um endereço permanente, configure um domínio com um túnel nomeado ou outro acesso HTTPS fixo. A autenticação é exigida também nas rotas de automação; cabeçalhos de identidade enviados pelo navegador são descartados.
 
-Revise as restrições de bateria/segundo plano do Termux nas configurações do Android. Os nomes das opções variam conforme a versão e o fabricante. O projeto Termux documenta [restrições e encerramentos de processos no Android](https://github.com/termux/termux-app#installation); supervisão e wake lock não garantem operação contínua se o sistema encerrar o próprio Termux. A validação real precisa incluir reboot e um período com tela apagada no seu aparelho.
+Outras pessoas podem acessar esse endereço de qualquer rede, entrar nas próprias contas e usar seus próprios e-mails de alertas. Na extensão do navegador, cada pessoa informa o endereço HTTPS desta instalação. O computador usado para instalar o servidor pode ficar desligado.
 
-## 5. Onde ficam os arquivos
+## Agendamento e e-mail
 
-| Local no Termux | Conteúdo |
+Edite `node.env` para ativar `ROCKSHOWBOT_SCHEDULER=true` e reinicie o painel. O agendador executa consultas às 09h/21h de Brasília, para todas as contas, e verifica confirmações de preferências a cada minuto. As consultas usam os coletores de fontes oficiais, Flesch, notícias e APIs configuradas. Fontes bloqueadas ou dependentes de JavaScript continuam com cobertura parcial; a pesquisa complementar feita por uma tarefa com navegador no Sites não se transforma automaticamente em pesquisa por IA no celular.
+
+Em **Conta → Configurar remetente de e-mail**, o administrador informa SMTP, usuário, credencial de aplicativo e remetente. A credencial fica no arquivo privado e não é exibida novamente. O serviço SMTP é de saída: não exige porta de entrada no roteador. **Sem SMTP, as mensagens permanecem pendentes e não são marcadas como enviadas.**
+
+Uma conta gratuita exclusiva do bot pode ser usada como remetente, desde que o provedor permita SMTP. Google e outros provedores podem exigir verificação de identidade, CAPTCHA e uma credencial de aplicativo. O bot não cria caixas postais nem contorna essas verificações. A senha de login do painel é independente da senha do e-mail.
+
+## Inicialização e operação
+
+O instalador cria `~/.termux/boot/50-rockshowbot-web`. Distribuições que usam Termux:Boot exigem o plugin da mesma origem e sua abertura inicial. A variante Google Play pode oferecer o receptor de boot integrado; confirme no aparelho. Retire as restrições de bateria do Termux e mantenha o wake lock. Valide uma reinicialização real e operação com tela apagada; supervisão não impede o Android de encerrar o aplicativo inteiro.
+
+```sh
+sv status "$SVDIR/rockshowbot-web" "$SVDIR/rockshowbot-tunnel"
+sv -w 20 restart "$SVDIR/rockshowbot-web"
+tail -n 80 ~/.local/state/rockshowbot-web/logs/current
+# Desabilitar também a próxima inicialização:
+sv-disable rockshowbot-web
+sv-disable rockshowbot-tunnel
+```
+
+A supervisão reinicia um processo que falhou. O script de boot respeita os serviços desabilitados. A configuração do servidor e os bancos ficam fora do artefato e são preservados ao atualizar o código. Os logs têm rotação de aproximadamente 1 MiB e cinco arquivos anteriores.
+
+## Dados, backup e atualização
+
+| Caminho | Conteúdo |
 | --- | --- |
-| `~/apps/rockshowbot/` | Código; pode ser atualizado por Git |
-| `~/.config/rockshowbot/server.env` | Senha, chaves, SMTP e preferências de execução |
-| `~/.local/share/rockshowbot/rockshowbot.db` | Artistas, países, e-mail e histórico SQLite |
-| `~/.local/share/rockshowbot/backups/` | Backups do banco |
-| `~/.local/state/rockshowbot/logs/` | Logs com rotação |
-| `~/.local/state/rockshowbot/boot.log` | Diagnóstico de inicialização após reboot |
-| `$PREFIX/var/service/rockshowbot/` | Serviço runit desta aplicação |
-| `$PREFIX/bin/rockshowbot` | Comando de operação |
-| `~/.termux/boot/50-rockshowbot` | Inicialização do RockShowBot após reboot |
-
-Use o armazenamento privado do Termux, fora de `/sdcard` e `~/storage/shared`, para manter permissões e semântica de arquivos Linux. Código e dados separados permitem acrescentar outros projetos ao celular sem misturar bancos, credenciais e serviços.
-
-## 6. Backup, restauração e atualização
+| `~/apps/rockshowbot-web/` | Artefato compilado |
+| `~/.config/rockshowbot/node.env` | Configuração e credenciais privadas |
+| `~/.config/rockshowbot/login.txt` | Credenciais iniciais; a senha pode ter sido alterada depois |
+| `~/.local/share/rockshowbot/web.db` | Radar do administrador, contas e sessões |
+| `~/.local/share/rockshowbot/users/<id>.db` | Radar de cada outra conta |
+| `~/.local/state/rockshowbot-web/logs/` | Logs do painel |
 
 ```sh
-rockshowbot backup
+python ~/apps/rockshowbot-web/deploy/node/backup.py
 ```
 
-O comando informa o caminho do `.tar.gz` criado. Ele usa a API de backup SQLite, inclusive com o serviço ativo. O arquivo contém o banco e um manifesto com hash de integridade; **não inclui o arquivo de configuração nem credenciais SMTP/API**. O banco contém dados pessoais como e-mail e artistas: guarde o backup de forma privada e copie-o para outro dispositivo. Preserve `server.env` separadamente quando quiser recuperar também as credenciais de uma instalação.
+O backup usa a API SQLite para capturar os bancos mesmo com o serviço ativo. Contém hashes de integridade e dados pessoais, inclusive hashes de senha e sessões; guarde-o de forma privada. Ele não inclui as credenciais SMTP do arquivo de configuração. Preserve `node.env` separadamente. Esse formato é diferente do backup do servidor Python.
 
-Para restaurar um backup deste backend:
+Para atualizar, gere um novo artefato no computador, faça backup, pare somente `rockshowbot-web`, extraia em uma pasta nova, preserve a pasta anterior e troque os caminhos do serviço ou mantenha o caminho original da aplicação. Reexecute `install-web.sh`/`install-tunnel.sh` e inicie o serviço. Os diretórios de dados não devem ser substituídos pelo artefato.
+
+## Migração do Sites
+
+A rota privada `/api/automation/migration/export` exporta artistas, eventos, preferências, recibos, resumos congelados, confirmações e histórico de buscas em um único lote D1. Exige o mesmo acesso de serviço do Site privado; sessões temporárias de importação e segredos da hospedagem não entram no arquivo. Guarde o JSON fora do repositório.
+
+Com o destino parado e sem artistas cadastrados:
 
 ```sh
-rockshowbot restore /caminho/rockshowbot-backup.tar.gz
+node deploy/node/import-cloud.mjs /caminho/backup.json ~/.local/share/rockshowbot/web.db
 ```
 
-A restauração valida o arquivo, para somente o RockShowBot, preserva um backup do banco anterior e restaura o SQLite. O serviço permanece parado até `rockshowbot start`. Arquivos de outros backends, inclusive D1/Sites, são rejeitados; não renomeie um dump D1 para tentar importá-lo.
-
-Para atualizar o código:
-
-```sh
-rockshowbot backup
-rockshowbot stop
-cd ~/apps/rockshowbot
-git pull --ff-only
-python deploy/termux/manage.py install
-rockshowbot start
-```
-
-O instalador atualiza os lançadores, preservando o arquivo privado e o banco. Se mudar o caminho do checkout, execute novamente o instalador na nova localização para atualizar os caminhos dos lançadores.
-
-## 7. Acesso por outros dispositivos
-
-O preset escuta apenas no próprio aparelho. Para administrar a partir do computador, vamos configurar um acesso privado ou um encaminhamento de porta na etapa de rede do celular. Mudar `HOST` para `0.0.0.0` torna a aplicação acessível pelas interfaces de rede; antes disso, defina como o acesso será protegido e como HTTPS será oferecido. O login atual é HTTP Basic.
-
-O envio SMTP é uma conexão de saída e não exige abrir uma porta do roteador. O preset não cria túneis públicos, contas SSH, encaminhamentos de porta ou serviços de rede adicionais.
-
-## 8. Antes da migração definitiva do Sites
-
-A preparação do Android está implementada, mas **o painel atual ainda não é executável completo no Termux**. Os seguintes pontos precisam ser portados e verificados antes de trocar a instância principal:
-
-- Importação pela extensão Apple Music/Spotify, catálogo e Deezer público, com autenticação própria do destino.
-- Coleta ampliada das 22 fontes oficiais e Flesch; o backend Python atual tem apenas Ticketmaster/PredictHQ e dicas manuais.
-- Regras de consolidação de shows/rumores, recibos de envio e confirmação de preferências do painel atual.
-- Exportação consistente do D1 e conversão de artistas, países, preferências, eventos, arquivamentos e histórico de notificações. O backup deste preset cobre apenas SQLite do Python.
-- Agendamento local equivalente às rotinas atuais e envio de e-mail com confirmação real, sem duplicar as tarefas Gmail da nuvem.
-- Acesso privado, recuperação após reboot, conectividade e estabilidade com tela apagada no Motorola.
-
-Na troca, preserve um backup da instância atual, valide o destino, depois desative as tarefas antigas e habilite o novo emissor de alertas. A preparação não executa nenhuma dessas mudanças na nuvem.
-
-## QA disponível
-
-`python3 -m unittest discover -s tests/selfhosted -v` inclui testes do instalador em diretórios temporários, preservação de outras aplicações, configuração sem execução de shell, backup/restauração, rejeição de arquivos inválidos e servidor Python real com login e encerramento por SIGTERM. Esses testes rodam em Linux e não equivalem à validação do Termux no aparelho físico.
-
-Em um computador Linux com Docker, `python3 tests/integration/termux-runit.py` verifica instalação, serviço runit real, login e gravação via HTTP, recuperação após falha forçada, boot habilitado/desabilitado, backup/restauração e preservação de outro serviço. A execução usa um contêiner descartável, sem montar dados privados do computador. O wake lock é simulado; esse teste também não comprova o comportamento do Android físico. A CI executa essa verificação junto do job Python 3.12.
+O importador mantém datas, classificações, flags e recibos. Recusa sobrescrever um banco que já tenha artistas. Os alertas do destino ficam desativados durante a transição. **Só encerre o emissor antigo depois de configurar e validar o novo envio.** Antes da troca definitiva, concilie os envios feitos na instância antiga após o snapshot para evitar repetições. O export não cria contas de e-mail e não transfere credenciais do Gmail conectado ao Sites.

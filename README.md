@@ -6,31 +6,33 @@ Licença [MIT](LICENSE): você pode usar, modificar, redistribuir e hospedar sua
 
 ## Escolha como hospedar
 
-O repositório contém duas aplicações com recursos diferentes:
+O painel completo tem dois destinos de hospedagem; o servidor Python permanece como alternativa mais simples.
 
-| Recurso | Painel web no Sites | Servidor Python independente |
-| --- | --- | --- |
-| Interface | React/Vinext | HTML servido pelo Python |
-| Hospedagem | Sites com acesso privado | Docker/VPS, Render ou Android/Termux |
-| Banco | D1 da própria instalação | SQLite em volume persistente |
-| Autenticação | Conta do proprietário no Sites | Usuário e senha administrativa |
-| Artistas Apple Music/Spotify | Extensão pelo navegador ou APIs opcionais | APIs oficiais com credenciais próprias |
-| Outras importações | Deezer público, catálogo Apple/Deezer, cadastro manual | Cadastro manual e CSV |
-| Fontes de shows | 22 fontes oficiais + Flesch + notícias; APIs opcionais | Ticketmaster/PredictHQ e dicas manuais |
-| Agendamento e e-mail | Tarefas externas + Gmail conectado, configurados pelo operador | Agendador no processo + SMTP próprio |
-| Confirmação de preferências por e-mail | Sim, com tarefa configurada | Não implementada |
-| Consolidação e recibos de alertas | Eventos equivalentes e histórico de envios | Deduplicação básica por evento |
+| Recurso | Painel no Sites | Painel Node/Termux | Python alternativo |
+| --- | --- | --- | --- |
+| Interface | React/Vinext | Mesmo painel React/Vinext | HTML/Python |
+| Banco | D1 | SQLite por conta | SQLite compartilhado |
+| Login | Conta do proprietário no Sites | Tela de login, sessões e contas isoladas | HTTP Basic administrativo |
+| Artistas | Extensão Apple Music/Spotify, catálogo e APIs opcionais | Mesmas importações do painel | APIs oficiais, manual e CSV |
+| Fontes | 22 oficiais + Flesch + notícias/APIs e pesquisa da tarefa | Mesmos coletores automáticos; cobertura parcial em páginas bloqueadas | Ticketmaster/PredictHQ e dicas |
+| Rotina/e-mail | Tarefas externas + Gmail conectado | Agendador local + SMTP próprio | Agendador local + SMTP próprio |
+| Confirmações e recibos | Sim | Sim | Recursos mais simples |
 
-**Para rodar em infraestrutura própria, comece pelo [guia Python/Docker](docs/guides/standalone.md).** Para ter o painel com extensão e catálogo ampliado, siga o [guia Sites](docs/guides/sites.md). Um fork não herda a hospedagem, o Gmail nem as tarefas de outra pessoa. Cada instância tem um radar pessoal; não há cadastro de usuários com dados isolados.
+Para usar o painel completo em um Android ligado 24/7, siga o [guia Node/Termux](docs/guides/termux.md). Para a versão privada hospedada, siga o [guia Sites](docs/guides/sites.md). O [guia Python/Docker](docs/guides/standalone.md) cobre a alternativa mais simples. Um fork não herda credenciais, tarefas ou dados de outra instalação.
 
-## Preparação para Android/Termux
+## Hospedar o painel completo no celular
 
-Há um [preset Termux](docs/guides/termux.md) com serviço supervisionado, boot, configuração privada, banco persistente, logs e backup. Ele usa o backend Python. O guia registra os recursos do painel Sites que ainda precisam ser portados antes da migração completa.
+Compile no computador e transfira o artefato para o Termux:
 
 ```sh
-# Dentro do checkout no Termux, após instalar python e termux-services:
-python deploy/termux/manage.py install
+npm ci
+npm run build:node
+npm run test:node
+npm run test:node:integration
+tar -czf /tmp/rockshowbot-web.tar.gz -C dist/standalone .
 ```
+
+O artefato inclui login e isolamento entre contas. No Termux, use Node LTS, Python e `termux-services`, extraia o pacote e execute `deploy/termux/install-web.sh`. O [tutorial](docs/guides/termux.md) cobre HTTPS, inicialização, usuários, SMTP, migração e backup. Um endereço HTTPS público permite acesso de fora da sua casa; cada pessoa usa uma conta e seu próprio e-mail de alertas.
 
 ## Começar com Python ou Docker
 
@@ -98,6 +100,8 @@ selfhosted/            servidor Python e sua configuração de exemplo
 extensions/browser/    extensão Apple Music e Spotify
 public/                protocolos das tarefas e arquivos públicos do painel
 drizzle/               migrações D1
+deploy/node/           servidor nativo, autenticação, contas e SQLite
+deploy/termux/         instalação e boot no Android
 deploy/python/         Dockerfile e Compose
 scripts/               utilitários do projeto
 tests/                 QA por aplicação e tipo de teste

@@ -10,9 +10,11 @@ Informe a versão/commit, a aplicação afetada, o impacto e passos de reproduç
 - O servidor Python tem login administrativo por HTTP Basic. Na internet, use HTTPS no proxy ou na hospedagem, senha forte e armazenamento persistente protegido. Ele também tem um único radar por instalação.
 - A extensão só deve enviar a lista de artistas para a instalação escolhida pelo usuário. A autenticação no streaming ocorre no próprio provedor. Credenciais de contas, cookies de streaming e endpoints privados não fazem parte do importador.
 
+- O destino Node/Termux usa senhas com scrypt, sessões revogáveis, verificação de origem em alterações e bancos separados por conta. O administrador do aparelho tem acesso ao armazenamento. Apenas uma entrada HTTPS deve ficar pública; o servidor nativo escuta em loopback por padrão.
+
 ## Instalação Termux
 
-O preset Android mantém configuração e banco no armazenamento privado do Termux e escuta em loopback por padrão. Backups contêm dados pessoais do banco, mas não incluem o arquivo de credenciais. Os comandos operam apenas no serviço RockShowBot e não liberam o wake lock global ao parar, para respeitar outros serviços do aparelho. A preparação não replica a autenticação ou os recursos do painel Sites.
+O preset Android mantém configuração e banco no armazenamento privado do Termux e escuta em loopback por padrão. Backups contêm dados pessoais do banco, mas não incluem o arquivo de credenciais. Os comandos operam apenas no serviço RockShowBot e não liberam o wake lock global ao parar, para respeitar outros serviços do aparelho. O preset Python é independente do painel web; o destino Node compartilha as regras do radar, mas usa autenticação e armazenamento próprios.
 
 ## Arquivos privados
 
