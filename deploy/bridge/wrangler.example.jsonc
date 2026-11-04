@@ -1,0 +1,10 @@
+{
+  "name": "rockshowbot",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-04",
+  "workers_dev": true,
+  "kv_namespaces": [
+    { "binding": "TUNNEL_STATE", "id": "REPLACE_WITH_YOUR_NAMESPACE_ID" }
+  ]
+  // Add ORIGIN_UPDATE_TOKEN with `wrangler secret put`, never in this file.
+}
