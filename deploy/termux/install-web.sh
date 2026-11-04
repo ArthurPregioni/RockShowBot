@@ -30,6 +30,8 @@ printf 's1048576\nn5\n' > "$state_root/logs/config"
 cat > "$HOME/.termux/boot/50-rockshowbot-web" <<RUN
 #!$PREFIX/bin/sh
 export PATH=$PREFIX/bin:\$PATH
+export SVDIR=$PREFIX/var/service
+export LOGDIR=$PREFIX/var/log
 [ -f '$service_root/down' ] && exit 0
 termux-wake-lock
 service-daemon start
