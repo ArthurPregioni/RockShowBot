@@ -1,8 +1,18 @@
 // Run after build:node. Uses a disposable DB, no SMTP, and only loopback.
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
-const base=process.env.ROCKSHOWBOT_NODE_QA_URL||'http://127.0.0.1:18766';
-assert.ok(['127.0.0.1','localhost'].includes(new URL(base).hostname));
+import {spawn} from 'node:child_process';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {createServer} from 'node:net';
+import path from 'node:path';
+const temporary=mkdtempSync(path.join(tmpdir(),'rockshowbot-node-qa-'));
+const reservation=createServer();await new Promise(resolve=>reservation.listen(0,'127.0.0.1',resolve));const port=reservation.address().port;await new Promise(resolve=>reservation.close(resolve));
+const base=`http://127.0.0.1:${port}`;
+const server=spawn(process.execPath,['deploy/node/server.mjs'],{env:{...process.env,DATABASE_PATH:path.join(temporary,'web.db'),APP_USER:'arthur',APP_PASSWORD:'qa-only-long-password-123',APP_PASSWORD_HASH:'',ROCKSHOWBOT_ENV_FILE:'',ROCKSHOWBOT_SCHEDULER:'false',SMTP_HOST:'',PORT:String(port),HOST:'127.0.0.1',ROCKSHOWBOT_SITE_ORIGIN:base},stdio:['ignore','pipe','pipe']});
+let logs='';server.stdout.on('data',chunk=>logs+=chunk);server.stderr.on('data',chunk=>logs+=chunk);
+const deadline=Date.now()+30000;
+while(true){try{if((await fetch(base+'/healthz')).ok)break;}catch{}if(server.exitCode!==null||Date.now()>deadline)throw new Error('QA server did not start: '+logs);await new Promise(resolve=>setTimeout(resolve,100));}
 const browser=await chromium.launch({headless:true});
 const owner=await browser.newContext(),other=await browser.newContext(),anonymous=await browser.newContext();
 const api=async(context,path,body,expected=200)=>{
@@ -37,4 +47,4 @@ try{
  await api(other,'/api/dashboard',undefined,401);await login(other,'guest'+stamp,password,401);await login(other,'guest'+stamp,'new-guest-qa-password-long');
  await owner.request.post(base+'/signout-with-chatgpt',{headers:{Origin:base}});await api(owner,'/api/dashboard',undefined,401);
  console.log('Node server QA OK: login, invalid credentials, CSRF, forged identity rejection, separate accounts/DBs/preferences, forbidden admin, extension import isolation, password change, session invalidation and logout. No emails sent.');
-}finally{await browser.close();}
+}finally{await browser.close();server.kill('SIGTERM');await new Promise(resolve=>server.once('close',resolve));rmSync(temporary,{recursive:true});}

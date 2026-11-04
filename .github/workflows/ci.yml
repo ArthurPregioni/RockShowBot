@@ -85,3 +85,7 @@ jobs:
             }
           '
           npm run test:delivery-flow
+
+      - run: npm run test:node
+      - run: npm run build:node
+      - run: npm run test:node:integration

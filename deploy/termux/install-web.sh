@@ -36,6 +36,9 @@ export LOGDIR=$PREFIX/var/log
 termux-wake-lock
 service-daemon start
 sv -w 20 up '$service_root'
+if [ -f '$PREFIX/var/service/rockshowbot-tunnel/.rockshowbot-managed' ] && [ ! -f '$PREFIX/var/service/rockshowbot-tunnel/down' ]; then
+  sv -w 20 up '$PREFIX/var/service/rockshowbot-tunnel'
+fi
 RUN
 chmod 700 "$service_root/run" "$service_root/log/run" "$HOME/.termux/boot/50-rockshowbot-web"
 printf 'Node service installed; configuration preserved.\n'

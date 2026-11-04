@@ -3,6 +3,7 @@ import {parseEnv} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
+import {mailHTML,saveMailConfig} from './mail-config.mjs';
 import {accountStore,accountHTML} from './accounts.mjs';
 import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML} from './session.mjs';
 
@@ -62,13 +63,14 @@ server.on('request',async(req,res)=>{
    else redirect(res,'/login?return_to='+encodeURIComponent(safeReturn(req.url)));
    return;
   }
-  if(['/account','/admin/users','/account/password'].includes(url.pathname)){
-   if(url.pathname==='/admin/users'&&account.role!=='admin'){html(res,403,'Acesso restrito ao administrador.');return;}
+  if(['/account','/admin/users','/account/password','/admin/email'].includes(url.pathname)){
+   if(url.pathname.startsWith('/admin/')&&account.role!=='admin'){html(res,403,'Acesso restrito ao administrador.');return;}
    let notice='';
    if(req.method==='POST'){
     let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}
     const form=new URLSearchParams(body);
     try{
+     if(url.pathname==='/admin/email'){saveMailConfig(form);html(res,200,mailHTML('Configuração salva. As mensagens pendentes serão processadas pelo agendador.'));return;}
      if(url.pathname==='/admin/users'){
       const created=await accounts.create(form.get('username')||'',form.get('email')||'');
       const userdb=localDatabase(created.id);userdb.migrate(path.join(root,'drizzle'));
@@ -82,6 +84,7 @@ server.on('request',async(req,res)=>{
      }
     }catch(error){html(res,400,accountHTML(accounts.list(),account.role==='admin',error.message));return;}
    }
+   if(url.pathname==='/admin/email'){html(res,200,mailHTML());return;}
    html(res,200,accountHTML(accounts.list(),account.role==='admin',notice));return;
   }
   req.headers['oai-authenticated-user-id']=account.id;

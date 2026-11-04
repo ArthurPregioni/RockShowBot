@@ -20,7 +20,7 @@ export function startScheduler({port,token,database,accounts,localDatabase}){
    if(confirmation.status!=='pending')continue;
    const message=await api('confirmations/claim',{id:confirmation.id});
    try{const messageId=await send(message);await api('confirmations/ack',{id:confirmation.id,messageId});}
-   catch{await api('confirmations/error',{id:confirmation.id,error:'SMTP sem confirmação; confira o provedor antes de reenviar.'});}
+   catch{await api('confirmations/error',{id:confirmation.id,status:'unknown',error:'SMTP sem confirmação; confira o provedor antes de reenviar.'});}
   }
   for(let batch=0;batch<2;batch++){
    const result=await api('alerts/prepare',{});if(!result.delivery)break;

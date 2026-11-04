@@ -17,3 +17,8 @@ test('Password verification, expiring sessions, logout and safe return paths',as
  const expired=sessions.create('arthur');db.connection.exec('UPDATE node_sessions SET expires=0');assert.equal(sessions.find(expired),undefined);
  assert.equal(safeReturn('https://evil.example'),'/');assert.equal(safeReturn('//evil.example'),'/');assert.equal(safeReturn('/music/browser-import?x=1'),'/music/browser-import?x=1');db.connection.close();
 });
+test('Batch export preserves complete multiline values and confirmation history',async()=>{
+ const db=new SQLiteBinding(':memory:');db.connection.exec('CREATE TABLE history(id TEXT PRIMARY KEY, body TEXT)');
+ const body='A real frozen outbox body\n'.repeat(400);await db.prepare('INSERT INTO history VALUES(?,?)').bind('message',body).run();
+ const results=await db.batch([db.prepare('SELECT * FROM history')]);assert.equal(results[0].results[0].body,body);db.connection.close();
+});
