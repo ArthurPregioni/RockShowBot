@@ -25,7 +25,7 @@
     "start:python": "python3 -m selfhosted.rockshowbot",
     "build:node": "node scripts/package-extension.mjs && vite build --config config/node.ts && node scripts/package-node.mjs",
     "start:node": "node deploy/node/server.mjs",
-    "test:node": "node --test tests/node/*.test.mjs",
+    "test:node": "node --test tests/node/*.test.mjs && python3 -m unittest discover -s tests/node -p \"test_*.py\" -v",
     "test:node:integration": "node tests/integration/node-server.mjs"
   },
   "dependencies": {

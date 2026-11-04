@@ -1,3 +1,4 @@
+import {freezeCloud} from '../../../features/migration/cloud';
 import {pendingAlerts,prepareAlert,claimAlert,acknowledgeAlert,alertFailure,alertHistory} from "../../../features/events/deliveries";
 import {savePreferences,pendingConfirmations,claimConfirmation,acknowledgeConfirmation,confirmationFailure} from "../../../features/preferences/confirmations";
 import { musicAction } from "../../../features/music/imports";
@@ -36,6 +37,15 @@ async function handle(request: Request, context: {params: Promise<{action:string
       const origin = request.headers.get("origin");
       if (!origin || origin !== originFor(request)) throw new UserError("Origem da requisição inválida.", 403);
     }
+    const currentSettings=await settings();
+    const migrated=currentSettings.schedule.startsWith('migrated:');
+    if(migrated&&action!=="automation/migration/export"){
+      const destination=currentSettings.schedule.slice(9);
+      if(action==="automation/context")return json({migrated:true,website:destination,artists:[],settings:{...currentSettings,countries:JSON.parse(currentSettings.countries)},sources:{official:[],journalism:[]},pendingAlerts:[]});
+      if(action==="automation/confirmations")return json({confirmations:[]});
+      if(action==="automation/alerts/prepare")return json({delivery:null,migrated:true});
+      if(action!=="automation/alerts/history")throw new UserError('Esta instalação foi migrada para '+destination,410);
+    }
     if (request.method === "GET") {
       if (action.startsWith("music/")) return await musicAction(request,action,{},user!.userId,originFor(request));
       if (action === "automation/migration/export") {
@@ -64,6 +74,11 @@ async function handle(request: Request, context: {params: Promise<{action:string
     if (action === "artists/remove") {
       await database().prepare("DELETE FROM watch_artists WHERE id=?").bind(String(body.id)).run();
       return json({ok:true});
+    }
+    if(action==="automation/migration/freeze"){
+      if(import.meta.env.ROCKSHOWBOT_STANDALONE==="true")throw new UserError('Este comando é exclusivo da instância de origem no Sites.',403);
+      if(body.confirm!=="move-to-personal-server")throw new UserError('Confirme o destino da migração.');
+      return json(await freezeCloud(body.destination));
     }
     if (action === "automation/alerts/prepare") return json(await prepareAlert());
     if (action === "automation/alerts/claim") return json(await claimAlert(body.id));

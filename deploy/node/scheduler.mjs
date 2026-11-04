@@ -1,5 +1,4 @@
-import {spawn} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
+import {smtpRequest} from './smtp-client.mjs';
 
 export function startScheduler({port,token,database,accounts,localDatabase}){
  let busy=false,currentOwner="local-owner";
@@ -8,26 +7,21 @@ export function startScheduler({port,token,database,accounts,localDatabase}){
   const response=await fetch(`http://127.0.0.1:${port}/api/automation/${action}`,{headers:{Authorization:`Bearer ${token}`,"x-rockshowbot-owner":currentOwner,...(body?{'Content-Type':'application/json'}:{})},...(body?{method:'POST',body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(240000)});
   const data=await response.json();if(!response.ok)throw new Error(`${action}: ${data.error||response.status}`);return data;
  };
- const send=message=>new Promise((resolve,reject)=>{
-  const child=spawn(process.env.PYTHON||'python3',[fileURLToPath(new URL('./smtp.py',import.meta.url))],{stdio:['pipe','pipe','pipe']});
-  let output='';child.stdout.on('data',chunk=>output+=chunk);child.stderr.resume();child.on('error',reject);
-  child.on('close',code=>{try{const result=JSON.parse(output);if(code||!result.accepted)throw new Error('SMTP não confirmou a entrega.');resolve(result.messageId);}catch(error){reject(error);}});
-  child.stdin.end(JSON.stringify(message));
- });
+ const send=async message=>(await smtpRequest(message)).messageId;
  async function mail(){
-  if(!process.env.SMTP_HOST)return;
+  if(!process.env.SMTP_HOST||process.env.ROCKSHOWBOT_DELIVERY_ENABLED==='false')return;
   for(const confirmation of (await api('confirmations')).confirmations||[]){
    if(confirmation.status!=='pending')continue;
    const message=await api('confirmations/claim',{id:confirmation.id});
    try{const messageId=await send(message);await api('confirmations/ack',{id:confirmation.id,messageId});}
-   catch{await api('confirmations/error',{id:confirmation.id,status:'unknown',error:'SMTP sem confirmação; confira o provedor antes de reenviar.'});}
+   catch(error){await api('confirmations/error',{id:confirmation.id,status:error.uncertain===false?'pending':'unknown',error:'SMTP sem confirmação; confira o provedor antes de reenviar.'});}
   }
   for(let batch=0;batch<2;batch++){
    const result=await api('alerts/prepare',{});if(!result.delivery)break;
    if(result.needsReconciliation){console.warn('Envio anterior sem confirmação: reconciliação manual necessária.');break;}
    const message=await api('alerts/claim',{id:result.delivery.id});
    try{const messageId=await send(message);await api('alerts/ack',{id:message.id,messageId});}
-   catch{await api('alerts/error',{id:message.id,status:'unknown',error:'SMTP sem confirmação; conferir o provedor antes de reenviar.'});break;}
+   catch(error){await api('alerts/error',{id:message.id,status:error.uncertain===false?'pending':'unknown',error:'SMTP sem confirmação; conferir o provedor antes de reenviar.'});break;}
   }
  }
  async function tick(){

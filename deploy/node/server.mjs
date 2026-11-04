@@ -70,7 +70,7 @@ server.on('request',async(req,res)=>{
     let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}
     const form=new URLSearchParams(body);
     try{
-     if(url.pathname==='/admin/email'){saveMailConfig(form);html(res,200,mailHTML('Configuração salva. As mensagens pendentes serão processadas pelo agendador.'));return;}
+     if(url.pathname==='/admin/email'){await saveMailConfig(form);html(res,200,mailHTML(process.env.ROCKSHOWBOT_DELIVERY_ENABLED==='false'?'Autenticação SMTP validada. Os disparos continuam pausados para concluir a migração.':'Autenticação SMTP validada e configuração salva.'));return;}
      if(url.pathname==='/admin/users'){
       const created=await accounts.create(form.get('username')||'',form.get('email')||'');
       const userdb=localDatabase(created.id);userdb.migrate(path.join(root,'drizzle'));
@@ -82,7 +82,7 @@ server.on('request',async(req,res)=>{
       binding.connection.prepare('DELETE FROM node_sessions WHERE username=?').run(account.username);
       redirect(res,'/login',cookie('',true));return;
      }
-    }catch(error){html(res,400,accountHTML(accounts.list(),account.role==='admin',error.message));return;}
+    }catch(error){html(res,400,url.pathname==='/admin/email'?mailHTML(error.message):accountHTML(accounts.list(),account.role==='admin',error.message));return;}
    }
    if(url.pathname==='/admin/email'){html(res,200,mailHTML());return;}
    html(res,200,accountHTML(accounts.list(),account.role==='admin',notice));return;
