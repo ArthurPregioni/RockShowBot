@@ -1,6 +1,8 @@
 """Private authenticated updates for the optional fixed workers.dev address."""
 import json
 import re
+import os
+import tempfile
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -41,3 +43,27 @@ def publish_origin(settings, tunnel, opener=None):
     with client.open(request, timeout=30) as response:
         if response.status != 200 or json.load(response).get('updated') is not True:
             raise RuntimeError('Bridge did not confirm update')
+
+
+def private_write(filename, value):
+    with tempfile.NamedTemporaryFile(mode='w', dir=filename.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        os.chmod(temporary, 0o600)
+        stream.write(value)
+    temporary.replace(filename)
+
+
+def configure_origin(config, tunnel, settings=None):
+    """Keep the app's canonical address fixed while the transport changes."""
+    origin = settings['publicOrigin'] if settings else tunnel
+    text = config.read_text()
+    line = 'ROCKSHOWBOT_SITE_ORIGIN=' + origin
+    updated = re.sub(r'^ROCKSHOWBOT_SITE_ORIGIN=.*$', line, text, flags=re.M)
+    if not re.search(r'^ROCKSHOWBOT_SITE_ORIGIN=', text, flags=re.M):
+        updated = text.rstrip() + '\n' + line + '\n'
+    private_write(config.parent / 'tunnel-url.txt', tunnel + '\n')
+    private_write(config.parent / 'public-url.txt', origin + '\n')
+    if updated == text:
+        return False
+    private_write(config, updated)
+    return True
