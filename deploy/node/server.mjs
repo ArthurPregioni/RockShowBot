@@ -1,0 +1,70 @@
+import {readFileSync} from 'node:fs';
+import {parseEnv} from 'node:util';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+import {randomBytes} from 'node:crypto';
+import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML} from './session.mjs';
+
+if(process.env.ROCKSHOWBOT_ENV_FILE){const values=parseEnv(readFileSync(process.env.ROCKSHOWBOT_ENV_FILE,'utf8'));for(const [key,value]of Object.entries(values))process.env[key]=value;}
+const root=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
+const username=process.env.APP_USER||'admin';
+let encoded=process.env.APP_PASSWORD_HASH;
+if(!encoded&&process.env.APP_PASSWORD?.length>=16)encoded=await passwordHash(process.env.APP_PASSWORD);
+if(!encoded)throw new Error('Configure APP_PASSWORD_HASH ou uma APP_PASSWORD com pelo menos 16 caracteres.');
+const origin=new URL(process.env.ROCKSHOWBOT_SITE_ORIGIN||'http://127.0.0.1:8765');
+if(origin.protocol!=='https:'&&!(origin.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(origin.hostname)))throw new Error('Use HTTPS para acesso externo.');
+process.env.ROCKSHOWBOT_SITE_ORIGIN=origin.origin;
+const {localDatabase}=await import('./runtime.mjs');
+const binding=localDatabase();binding.migrate(path.join(root,'drizzle'));
+const sessions=sessionStore(binding.connection),attempts=new Map();
+const schedulerToken=randomBytes(32).toString('hex');
+const {startProdServer}=await import('vinext/server/prod-server');
+const {server,port}=await startProdServer({port:Number(process.env.PORT||8765),host:process.env.HOST||'127.0.0.1',outDir:path.resolve(process.env.ROCKSHOWBOT_BUILD_DIR||path.join(root,'dist'))});
+const handlers=server.listeners('request');server.removeAllListeners('request');
+const html=(res,status,body,extra={})=>{res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Content-Security-Policy':"frame-ancestors 'none'",...extra});res.end(body);};
+const redirect=(res,to,cookie)=>{res.writeHead(303,{'Location':to,'Cache-Control':'no-store',...(cookie?{'Set-Cookie':cookie}:{})});res.end();};
+const cookie=(token,clear=false)=>`${sessionCookie}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${clear?0:604800}${origin.protocol==='https:'?'; Secure':''}`;
+server.on('request',async(req,res)=>{
+ try{
+  const url=new URL(req.url,'http://localhost');
+  // Strip identity asserted by callers before adding this server's verified owner.
+  for(const key of Object.keys(req.headers))if(key.startsWith('oai-authenticated-user-'))delete req.headers[key];
+  const token=cookies(req.headers.cookie)[sessionCookie],owner=sessions.find(token);
+  const internal=req.headers.authorization===`Bearer ${schedulerToken}`&&['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  if(url.pathname==='/healthz'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({app:'RockShowBot',backend:'node',ok:true}));return;}
+  if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!internal){
+   const allowed=new Set([origin.origin,`http://127.0.0.1:${port}`,`http://localhost:${port}`]);
+   if(!allowed.has(req.headers.origin)){html(res,403,'Origem da requisição inválida.');return;}
+  }
+  if(url.pathname==='/signin-with-chatgpt'){redirect(res,'/login?return_to='+encodeURIComponent(safeReturn(url.searchParams.get('return_to'))));return;}
+  if(url.pathname==='/signout-with-chatgpt'){
+   if(req.method!=='POST'){html(res,200,'<form method="post"><button>Sair do RockShowBot</button></form>');return;}
+   sessions.revoke(token);redirect(res,'/login',cookie('',true));return;
+  }
+  if(url.pathname==='/login'){
+   if(req.method==='GET'){if(owner)redirect(res,safeReturn(url.searchParams.get('return_to')));else html(res,200,loginHTML('',url.searchParams.get('return_to')));return;}
+   if(req.method!=='POST'){html(res,405,'Método inválido.');return;}
+   const key=req.socket.remoteAddress,bucket=attempts.get(key)||{count:0,until:Date.now()+600000};
+   if(bucket.until<Date.now()){bucket.count=0;bucket.until=Date.now()+600000;}
+   attempts.set(key,bucket);if(bucket.count>=10){html(res,429,loginHTML('Muitas tentativas. Aguarde dez minutos.'));return;}
+   let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}
+   const form=new URLSearchParams(body);bucket.count++;
+   if(form.get('username')!==username||!await verifyPassword(form.get('password')||'',encoded)){html(res,401,loginHTML('Usuário ou senha incorretos.',form.get('return_to')));return;}
+   attempts.delete(key);redirect(res,safeReturn(form.get('return_to')),cookie(sessions.create(username)));return;
+  }
+  if(!owner&&!internal){
+   if(url.pathname.startsWith('/api/')){res.writeHead(401,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'Entre na sua conta para continuar.'}));}
+   else redirect(res,'/login?return_to='+encodeURIComponent(safeReturn(req.url)));
+   return;
+  }
+  req.headers['oai-authenticated-user-id']='local-owner';
+  req.headers['oai-authenticated-user-email']=process.env.ADMIN_EMAIL||`${username}@localhost`;
+  req.headers['oai-authenticated-user-full-name']=encodeURIComponent(process.env.ADMIN_NAME||username);
+  req.headers['oai-authenticated-user-full-name-encoding']='percent-encoded-utf-8';
+  for(const handler of handlers)handler.call(server,req,res);
+ }catch(error){console.error('Request failed:',error.name);if(!res.headersSent)html(res,500,'Não foi possível concluir. Tente novamente.');else res.destroy();}
+});
+console.log(`RockShowBot com login ativo em http://${process.env.HOST||'127.0.0.1'}:${port}`);
+if(process.env.ROCKSHOWBOT_SCHEDULER==='true'){
+ const {startScheduler}=await import('./scheduler.mjs');startScheduler({port,token:schedulerToken,database:binding.connection});
+}
