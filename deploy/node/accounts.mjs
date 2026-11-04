@@ -7,12 +7,16 @@ export function accountStore(db){
   find(username){return db.prepare('SELECT * FROM node_accounts WHERE username=? COLLATE NOCASE').get(username);},
   byId(id){return db.prepare('SELECT * FROM node_accounts WHERE id=?').get(id);},
   list(){return db.prepare('SELECT id,username,email,role FROM node_accounts ORDER BY username').all();},
-  async create(username,email){
+  async create(username,email,password=randomBytes(20).toString('base64url')){
    if(!/^[a-zA-Z0-9._-]{3,40}$/.test(username))throw new Error('Use de 3 a 40 letras, números, ponto, hífen ou sublinhado.');
    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)throw new Error('Informe um e-mail válido.');
+   if(password.length<16||password.length>512)throw new Error('Use uma senha de 16 a 512 caracteres.');
    if(this.find(username))throw new Error('Esse usuário já existe.');
-   const id=randomUUID(),password=randomBytes(20).toString('base64url');
-   db.prepare("INSERT INTO node_accounts(id,username,email,password_hash,role) VALUES(?,?,?,?,'user')").run(id,username,email,await passwordHash(password));
+   const id=randomUUID();
+   const hash=await passwordHash(password);
+   // Check again after scrypt yields so concurrent signups get the same safe error.
+   if(this.find(username))throw new Error('Esse usuário já existe.');
+   db.prepare("INSERT INTO node_accounts(id,username,email,password_hash,role) VALUES(?,?,?,?,'user')").run(id,username,email,hash);
    return {id,username,password};
   },
   async changePassword(id,password){

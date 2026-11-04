@@ -2,7 +2,9 @@
 
 O painel React pode rodar em **Node nativo com SQLite**, mantendo as telas, a extensão Apple Music/Spotify, o catálogo ampliado e as regras de consolidação e recibos. Esse destino usa o mesmo código do radar e substitui os serviços D1 e de autenticação do Sites por adaptadores locais. O [servidor Python alternativo](termux-python.md) continua disponível, com menos recursos.
 
-O destino Node tem uma tela de login, sessões revogáveis e contas separadas. Cada pessoa tem seu banco de artistas, países, preferências e histórico. O administrador cria contas em **Conta → Criar conta**, entrega a senha inicial por um canal privado e pode configurar um remetente SMTP comum. A pessoa pode alterar a própria senha; o e-mail de alertas é individual. O operador do aparelho continua tendo acesso aos arquivos dos bancos.
+O destino Node tem uma tela de login, cadastro, sessões revogáveis e contas separadas. Cada pessoa tem seu banco de artistas, países, preferências e histórico. Na tela de entrada, **Criar conta** abre o cadastro com usuário, e-mail e senha de pelo menos 16 caracteres. Depois de cadastrar, a pessoa entra diretamente em seu radar vazio e escolhe seus artistas e preferências de alertas. Contas novas não recebem privilégios de administrador e começam com o envio de alertas desativado.
+
+A conta de administrador é criada na instalação; seu usuário e sua senha inicial ficam no arquivo privado `~/.config/rockshowbot/login.txt` do servidor. Entre com essa conta para administrar o remetente e criar usuários manualmente em **Conta → Criar conta**. Para fechar o cadastro público, configure `ROCKSHOWBOT_REGISTRATION_ENABLED=false` no arquivo privado `node.env` e reinicie o serviço; as contas existentes continuam funcionando. O cadastro tem um limite global de 20 tentativas por hora em cada processo do servidor. Cada pessoa pode alterar a própria senha; o e-mail de alertas é individual. O operador do aparelho continua tendo acesso aos arquivos dos bancos.
 
 ## Preparar o artefato no computador
 
