@@ -7,6 +7,7 @@ function environment(){const values=new Map();return {ORIGIN_UPDATE_TOKEN:token,
 const update=(value,secret=token)=>new Request(base+'/_rockshowbot/tunnel',{method:'POST',headers:{Authorization:'Bearer '+secret},body:JSON.stringify({origin:value})});
 test('Bridge updates require authentication and accept only plain HTTPS tunnel origins',async()=>{
  const env=environment();
+ const https=await handleBridge(new Request('http://rockshowbot.example.workers.dev/login'),env);assert.equal(https.status,308);assert.equal(https.headers.get('Location'),base+'/login');
  assert.equal((await handleBridge(update(origin,'wrong'),env)).status,401);assert.equal(env.values.size,0);
  for(const value of ['http://phone.trycloudflare.com','https://example.com','https://user:pass@phone.trycloudflare.com','https://phone.trycloudflare.com/path','https://phone.trycloudflare.com/?token=x','https://127.0.0.1','https://phone.trycloudflare.com.evil.example']){
   assert.throws(()=>tunnelOrigin(value));assert.equal((await handleBridge(update(value),env)).status,400);

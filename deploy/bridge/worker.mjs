@@ -1,6 +1,6 @@
 // A fixed public address; application data and sessions remain on the phone.
 const updatePath='/_rockshowbot/tunnel';
-const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
+const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Strict-Transport-Security':'max-age=31536000'};
 const json=(data,status=200)=>Response.json(data,{status,headers});
 export function tunnelOrigin(value){
  if(typeof value!=='string')throw new Error('Invalid tunnel');
@@ -20,6 +20,7 @@ async function authorized(request,secret){
 }
 export async function handleBridge(request,env,fetcher=fetch){
  const publicURL=new URL(request.url);
+ if(publicURL.protocol==='http:'){publicURL.protocol='https:';return Response.redirect(publicURL.toString(),308);}
  if(publicURL.pathname===updatePath){
   if(!await authorized(request,env.ORIGIN_UPDATE_TOKEN))return json({error:'Unauthorized'},401);
   if(request.method!=='POST')return json({error:'Method not allowed'},405);
@@ -48,4 +49,5 @@ export async function handleBridge(request,env,fetcher=fetch){
  }
  return output;
 }
-export default {fetch(request,env){return handleBridge(request,env);}};
+const worker={fetch(request,env){return handleBridge(request,env);}};
+export default worker;

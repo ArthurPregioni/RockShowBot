@@ -41,6 +41,7 @@ class BridgeTests(unittest.TestCase):
                 self.assertEqual(request.method, 'POST')
                 self.assertEqual(request.full_url, 'https://rockshowbot.example.workers.dev/_rockshowbot/tunnel')
                 self.assertEqual(request.get_header('Authorization'), 'Bearer test-only')
+                self.assertEqual(request.get_header('User-agent'), 'RockShowBot/0.1')
                 self.assertEqual(json.loads(request.data)['origin'], 'https://one.trycloudflare.com')
                 self.assertEqual(timeout, 30)
                 result = io.BytesIO(b'{"updated":true}')

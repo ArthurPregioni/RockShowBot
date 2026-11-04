@@ -38,7 +38,8 @@ def publish_origin(settings, tunnel, opener=None):
         settings['publicOrigin'] + '/_rockshowbot/tunnel',
         data=json.dumps({'origin': tunnel}).encode(),
         headers={'Authorization': 'Bearer ' + settings['updateToken'],
-                 'Content-Type': 'application/json'}, method='POST')
+                 'Content-Type': 'application/json', 'Accept': 'application/json',
+                 'User-Agent': 'RockShowBot/0.1'}, method='POST')
     client = opener or urllib.request.build_opener(NoRedirect())
     with client.open(request, timeout=30) as response:
         if response.status != 200 or json.load(response).get('updated') is not True:
