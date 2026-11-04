@@ -65,7 +65,7 @@ Abra <http://127.0.0.1:8000>, entre com `APP_USER`/`APP_PASSWORD`, adicione arti
 
 ## Desenvolver o painel web
 
-Requisitos: Node.js 22.13+ e npm. Os comandos usam o lockfile versionado:
+Requisitos: Node.js 22.16+ e npm. Os comandos usam o lockfile versionado:
 
 ```sh
 npm ci

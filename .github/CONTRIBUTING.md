@@ -6,7 +6,7 @@ Forks, instalações próprias, correções, novos provedores e melhorias nos gu
 
 Leia a [arquitetura](../docs/architecture.md) e escolha a aplicação que vai alterar. O [README](../README.md) traz a comparação e os comandos de instalação.
 
-Para o painel web, use Node.js 22.13+ e `npm ci`. Para Python, use Python 3.10+; o servidor não exige pacotes externos. A assinatura opcional de tokens MusicKit tem sua dependência em `scripts/requirements-token.txt`.
+Para o painel web, use Node.js 22.16+ e `npm ci`. Para Python, use Python 3.10+; o servidor não exige pacotes externos. A assinatura opcional de tokens MusicKit tem sua dependência em `scripts/requirements-token.txt`.
 
 ## Onde alterar
 

@@ -6,7 +6,7 @@ O destino Node tem uma tela de login, sessões revogáveis e contas separadas. C
 
 ## Preparar o artefato no computador
 
-Use Node 22.13+ com `node:sqlite` disponível. O build é feito no computador para evitar instalar Vite, workerd ou um ambiente de compilação no celular.
+Use Node 22.16+ com `node:sqlite` disponível. O build é feito no computador para evitar instalar Vite, workerd ou um ambiente de compilação no celular.
 
 ```sh
 npm ci
