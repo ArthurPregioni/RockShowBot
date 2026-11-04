@@ -1,7 +1,7 @@
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function authHTML({register=false,error='',returnTo='/',registrationEnabled=true}={}){
  const title=register?'Criar conta':'Entrar';
- const username=`<label for="username">Usuário</label><input id="username" name="username" autocomplete="username" required autofocus minlength="3" maxlength="40" ${register?'pattern="[a-zA-Z0-9._-]{3,40}"':''}>`;
+ const username=`<label for="username">Usuário</label><input id="username" name="username" autocomplete="username" required autofocus ${register?'minlength="3" maxlength="40" pattern="[a-zA-Z0-9._-]{3,40}"':'maxlength="100"'}>`;
  const email=register?'<label for="email">E-mail de alertas</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="254">':'';
  const password=`<label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="${register?'new':'current'}-password" required ${register?'minlength="16"':''} maxlength="512" ${register?'aria-describedby="password-hint"':''}>`;
  const confirmation=register?'<p id="password-hint" class="hint">Use pelo menos 16 caracteres. Você pode usar uma frase.</p><label for="confirmation">Confirmar senha</label><input id="confirmation" name="confirmation" type="password" autocomplete="new-password" required minlength="16" maxlength="512">':'';
