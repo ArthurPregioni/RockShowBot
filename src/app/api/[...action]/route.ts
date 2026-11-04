@@ -39,7 +39,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
     }
     const currentSettings=await settings();
     const migrated=currentSettings.schedule.startsWith('migrated:');
-    if(migrated&&action!=="automation/migration/export"){
+    if(migrated&&action!=="automation/migration/export"&&action!=="automation/migration/resume"){
       const destination=currentSettings.schedule.slice(9);
       if(action==="automation/context")return json({migrated:true,website:destination,artists:[],settings:{...currentSettings,countries:JSON.parse(currentSettings.countries)},sources:{official:[],journalism:[]},pendingAlerts:[]});
       if(action==="automation/confirmations")return json({confirmations:[]});
@@ -74,6 +74,15 @@ async function handle(request: Request, context: {params: Promise<{action:string
     if (action === "artists/remove") {
       await database().prepare("DELETE FROM watch_artists WHERE id=?").bind(String(body.id)).run();
       return json({ok:true});
+    }
+    if(action==="automation/migration/resume"){
+      if(import.meta.env.ROCKSHOWBOT_STANDALONE==="true"||!migrated||body.confirm!=="resume-old-sender"||typeof body.notifications!=="boolean")throw new UserError('Retomada da origem inválida.',409);
+      await database().batch([
+        database().prepare("UPDATE bot_settings SET schedule='active',notifications=? WHERE id=1").bind(body.notifications?1:0),
+        database().prepare("UPDATE alert_deliveries SET status='pending',last_error='' WHERE status='cancelled' AND last_error='Migrado para outro servidor antes do envio.'"),
+        database().prepare("UPDATE preference_confirmations SET status='pending',last_error='' WHERE status='superseded' AND last_error='Transferido para o novo servidor.'"),
+      ]);
+      return json({resumed:true});
     }
     if(action==="automation/migration/freeze"){
       if(import.meta.env.ROCKSHOWBOT_STANDALONE==="true")throw new UserError('Este comando é exclusivo da instância de origem no Sites.',403);

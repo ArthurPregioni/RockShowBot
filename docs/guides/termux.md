@@ -67,6 +67,8 @@ Edite `node.env` para ativar `ROCKSHOWBOT_SCHEDULER=true` e reinicie o painel. O
 
 Em **Conta → Configurar remetente de e-mail**, o administrador informa SMTP, usuário, credencial de aplicativo e remetente. A credencial fica no arquivo privado e não é exibida novamente. O serviço SMTP é de saída: não exige porta de entrada no roteador. **Sem SMTP, as mensagens permanecem pendentes e não são marcadas como enviadas.**
 
+Ao salvar, o painel faz uma conexão TLS e valida a autenticação, sem enviar mensagem. Para Gmail, use `smtp.gmail.com`, porta `587` e uma [senha de app](https://support.google.com/mail/answer/185833?hl=pt-BR), disponível após ativar a verificação em duas etapas. A senha da conta Google não substitui essa credencial. A mensagem **Autenticação SMTP validada** confirma que a configuração foi salva no servidor.
+
 Uma conta gratuita exclusiva do bot pode ser usada como remetente, desde que o provedor permita SMTP. Google e outros provedores podem exigir verificação de identidade, CAPTCHA e uma credencial de aplicativo. O bot não cria caixas postais nem contorna essas verificações. A senha de login do painel é independente da senha do e-mail.
 
 ## Inicialização e operação
@@ -114,3 +116,12 @@ node deploy/node/import-cloud.mjs /caminho/backup.json ~/.local/share/rockshowbo
 ```
 
 O importador mantém datas, classificações, flags e recibos. Recusa sobrescrever um banco que já tenha artistas. Os alertas do destino ficam desativados durante a transição. **Só encerre o emissor antigo depois de configurar e validar o novo envio.** Antes da troca definitiva, concilie os envios feitos na instância antiga após o snapshot para evitar repetições. O export não cria contas de e-mail e não transfere credenciais do Gmail conectado ao Sites.
+
+Para a troca definitiva:
+
+1. No arquivo privado `node.env` do destino, mantenha `ROCKSHOWBOT_DELIVERY_ENABLED=false` e reinicie o serviço. Configure e valide o SMTP pelo painel.
+2. Com o acesso de serviço da instância Sites, faça `POST /api/automation/migration/freeze` com `{"confirm":"move-to-personal-server","destination":"https://seu-novo-endereco.example"}`. Guarde a resposta JSON em um arquivo privado. A operação captura o histórico antes de pausar a origem; envios reservados ou incertos impedem a troca com HTTP 409 e exigem conciliação. A origem passa a redirecionar para o destino, e suas rotinas deixam de preparar e enviar mensagens.
+3. Pare somente o serviço web do destino. Execute `node deploy/node/merge-cloud.mjs /caminho/export-congelado.json ~/.local/share/rockshowbot/web.db`. O comando concilia recibos e mensagens enviadas após a primeira cópia, preserva as contas e não habilita disparos. Faça backup antes de executá-lo.
+4. Confira as preferências do proprietário e os recibos. Restaure sua opção de receber alertas, altere `ROCKSHOWBOT_DELIVERY_ENABLED=true` e inicie o serviço. As outras contas mantêm suas preferências individuais.
+
+Se a conciliação falhar, mantenha o destino pausado. Antes de qualquer envio pelo destino, é possível retomar a origem com `POST /api/automation/migration/resume`, corpo `{"confirm":"resume-old-sender","notifications":true}`; use o valor original de `notifications` do export. Depois que o destino enviar mensagens, concilie também seus novos recibos antes de considerar uma volta à origem.
