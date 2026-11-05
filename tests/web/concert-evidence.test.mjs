@@ -28,6 +28,34 @@ test('Requires an explicit future concert claim and a destination supported by t
  const xml='<rss><item><title>Foo Fighters pode fazer show no Brasil</title><link>https://news.example/concert</link><source>Jornal</source></item></rss>';
  assert.equal(newsItems(xml,'Foo Fighters','BR').length,1);assert.equal(newsItems(xml,'Foo Fighters','AR').length,0);
 });
+test('Publisher names, unrelated speculation and longer artist names never establish concert evidence',()=>{
+ for(const [artist,title,country,source]of [
+  ['Aerosmith','Aerosmith pode anunciar show nos EUA - Rolling Stone Brasil','BR','Rolling Stone Brasil'],
+  ['Foo Fighters','Foo Fighters pode lançar álbum depois de show no Brasil','BR','Jornal'],
+  ['Foo Fighters','Foo Fighters fala sobre álbum; fã diz que pode haver show no Brasil','BR','Jornal'],
+  ['Rush','Big Time Rush pode fazer show no Brasil','BR','Jornal'],
+  ['Creed','Esme Creed-Miles pode fazer show no Brasil','BR','Jornal'],
+  ['Foo Fighters','Foo Fighters anuncia livro sobre show no Brasil','BR','Jornal'],
+  ['Foo Fighters','Foo Fighters pode voltar ao álbum depois de show no Brasil','BR','Jornal'],
+  ['Foo Fighters','Foo Fighters retorna ao álbum gravado em show no Brasil','BR','Jornal'],
+ ]){
+  assert.equal(concertNewsStatus(title,artist,country,source),null,title);
+  const xml=`<rss><item><title><![CDATA[${title}]]></title><link>https://news.example/article</link><source>${source}</source></item></rss>`;
+  assert.equal(newsItems(xml,artist,country).length,0,'RSS must reject '+title);
+ }
+ assert.equal(concertNewsStatus('Foo Fighters anuncia show no Brasil e pode lançar álbum','Foo Fighters','BR','Jornal'),'reported');
+});
+test('Keeps genuine speculative performances, including Spanish headlines and quoted artist names',()=>{
+ for(const [artist,title,country]of [
+  ['Foo Fighters','Foo Fighters pode fazer show no Brasil','BR'],
+  ['Foo Fighters','Rumores de uma possível turnê do Foo Fighters no Brasil','BR'],
+  ['Foo Fighters','Foo Fighters negocia shows no Brasil','BR'],
+  ['Foo Fighters','"Foo Fighters" pode anunciar uma nova turnê no Brasil','BR'],
+  ['Placebo','Placebo podría regresar a Chile con conciertos','CL'],
+  ['Placebo','Posible concierto de Placebo en Chile','CL'],
+ ])assert.equal(concertNewsStatus(title,artist,country,'Jornal'),'unverified',title);
+ assert.equal(concertNewsStatus('Simple Plan anuncia turnê no Brasil com All Time Low e Fresno','Fresno','BR','Jornal'),'reported');
+});
 test('Digest summarizes all items, limits source links and escapes article text',()=>{
  const events=Array.from({length:12},(_,i)=>({id:String(i),artist:'Band '+i,title:'Band pode tocar no Brasil <script>bad()</script>',country:'BR',city:'',starts_at:'',url:'https://news.example/story-'+i,source:'News <img src=x>',status:'unverified',notified:0}));
  const message=renderAlert('qa-digest',events,'https://shows.example');

@@ -46,9 +46,26 @@ try{
  const archived=legacy.connection.prepare("SELECT status,notified FROM show_events WHERE id='legacy-news'").get();assert.equal(archived.status,'irrelevant');assert.equal(archived.notified,1);legacy.connection.close();
  const falseNews={artist:band,title:band+' anuncia show no Brasil',country:'AR',city:'',startsAt:'',url:'https://news.example/wrong-country',source:'Jornal',status:'unverified'};
  assert.equal((await(await api(owner,'/api/events',{events:[falseNews]})).json()).added,0);
+ await api(owner,'/api/settings',{email:'owner-qa@example.test',notifications:true,countries:['BR','AR']});
+ const rejectedNews=[
+  {...falseNews,country:'BR',title:band+' pode anunciar show nos EUA - Rolling Stone Brasil',source:'Rolling Stone Brasil'},
+  {...falseNews,country:'BR',title:band+' pode lançar álbum depois de show no Brasil'},
+  {...falseNews,country:'BR',title:'Tributo a '+band+' anuncia show no Brasil'},
+ ];
+ // Rediscovery in later scans must still be rejected; this is not a one-off cleanup.
+ for(let scan=0;scan<2;scan++){
+  assert.equal((await(await api(owner,'/api/events',{events:rejectedNews})).json()).added,0);
+  assert.equal((await(await api(owner,'/api/automation/alerts/prepare',{})).json()).delivery,null);
+ }
  const realRumor={...falseNews,title:band+' pode fazer show no Brasil',country:'BR',url:'https://news.example/rumor'};
  assert.equal((await(await api(owner,'/api/events',{events:[realRumor]})).json()).added,1);
  assert.ok((await(await api(owner,'/api/dashboard')).json()).events.some(e=>e.artist===band&&e.status==='unverified'));
+ const pending=(await(await api(owner,'/api/automation/alerts/prepare',{})).json()).delivery;assert.equal(pending.possibilities,1);assert.match(pending.body,/pode fazer show no Brasil/);
+ // A stale, prepared email must fail the final eligibility check when evidence changes.
+ const changed=new SQLiteBinding(path.join(temporary,'web.db'));
+ changed.connection.prepare("UPDATE show_events SET title=? WHERE artist=? AND status='unverified'").run(band+' nega show no Brasil',band);changed.connection.close();
+ await api(owner,'/api/automation/alerts/claim',{id:pending.id},409);
+ assert.equal((await(await api(owner,'/api/automation/alerts/prepare',{})).json()).delivery,null);
  const signup={username:'signup'+stamp,email:'new@example.test',password:'registration-qa-password-long',confirmation:'registration-qa-password-long',role:'admin'};
  const invalid=async(form,origin=base,status=400)=>{
   const r=await anonymous.request.post(base+'/register',{headers:{Origin:origin},form});assert.equal(r.status(),status);return r;
