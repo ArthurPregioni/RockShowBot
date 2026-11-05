@@ -1,4 +1,5 @@
 import {freezeCloud} from '../../../features/migration/cloud';
+import {migrationDestination} from '../../../core/migration';
 import {pendingAlerts,prepareAlert,claimAlert,acknowledgeAlert,alertFailure,alertHistory} from "../../../features/events/deliveries";
 import {savePreferences,pendingConfirmations,claimConfirmation,acknowledgeConfirmation,confirmationFailure} from "../../../features/preferences/confirmations";
 import { musicAction } from "../../../features/music/imports";
@@ -39,7 +40,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
     }
     const currentSettings=await settings();
     const migrated=currentSettings.schedule.startsWith('migrated:');
-    if(migrated&&action!=="automation/migration/export"&&action!=="automation/migration/resume"){
+    if(migrated&&!["automation/migration/export","automation/migration/resume","automation/migration/destination"].includes(action)){
       const destination=currentSettings.schedule.slice(9);
       if(action==="automation/context")return json({migrated:true,website:destination,artists:[],settings:{...currentSettings,countries:JSON.parse(currentSettings.countries)},sources:{official:[],journalism:[]},pendingAlerts:[]});
       if(action==="automation/confirmations")return json({confirmations:[]});
@@ -74,6 +75,12 @@ async function handle(request: Request, context: {params: Promise<{action:string
     if (action === "artists/remove") {
       await database().prepare("DELETE FROM watch_artists WHERE id=?").bind(String(body.id)).run();
       return json({ok:true});
+    }
+    if(action==="automation/migration/destination"){
+      if(import.meta.env.ROCKSHOWBOT_STANDALONE==="true"||!migrated||body.confirm!=="update-migration-destination")throw new UserError('Alteração do destino inválida.',409);
+      let destination:string;try{destination=migrationDestination(body.destination);}catch(error){throw new UserError((error as Error).message);}
+      await database().prepare("UPDATE bot_settings SET schedule=?,notifications=0 WHERE id=1 AND schedule LIKE 'migrated:%'").bind('migrated:'+destination).run();
+      return json({updated:true,destination});
     }
     if(action==="automation/migration/resume"){
       if(import.meta.env.ROCKSHOWBOT_STANDALONE==="true"||!migrated||body.confirm!=="resume-old-sender"||typeof body.notifications!=="boolean")throw new UserError('Retomada da origem inválida.',409);

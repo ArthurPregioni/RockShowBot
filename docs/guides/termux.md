@@ -59,7 +59,7 @@ sv -w 20 up "$SVDIR/rockshowbot-tunnel"
 cat ~/.config/rockshowbot/public-url.txt
 ```
 
-O túnel cria um endereço `https://...trycloudflare.com`. O helper atualiza `ROCKSHOWBOT_SITE_ORIGIN` e reinicia somente o painel quando o endereço muda. **Esse endereço muda quando o processo do túnel reinicia**, inclusive após reboot. Para um endereço permanente, configure um domínio com um túnel nomeado ou outro acesso HTTPS fixo. A autenticação é exigida também nas rotas de automação; cabeçalhos de identidade enviados pelo navegador são descartados.
+O túnel cria um endereço `https://...trycloudflare.com`. O helper atualiza `ROCKSHOWBOT_SITE_ORIGIN` e reinicia somente o painel quando o endereço muda. **Esse endereço muda quando o processo do túnel reinicia**, inclusive após reboot. Para manter um subdomínio gratuito fixo, use a [ponte workers.dev](fixed-address.md); um domínio próprio com túnel nomeado é outra opção. A autenticação é exigida também nas rotas de automação; cabeçalhos de identidade enviados pelo navegador são descartados.
 
 Outras pessoas podem acessar esse endereço de qualquer rede, entrar nas próprias contas e usar seus próprios e-mails de alertas. Na extensão do navegador, cada pessoa informa o endereço HTTPS desta instalação. O computador usado para instalar o servidor pode ficar desligado.
 
