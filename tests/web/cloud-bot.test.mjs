@@ -15,10 +15,10 @@ test("Apple library pagination reads candidates without disclosing tokens to ano
   const hostile=async()=>Response.json({data:[],next:"https://untrusted.example/steal"});
   await assert.rejects(()=>appleLibrary("user-token","developer-token","https://shows.example",hostile),/paginação inválida/);
 });
-test("News remains unverified and publication date is never a concert date",()=>{
+test("Press announcements stay reported and publication date is never a concert date",()=>{
   const xml=`<rss><channel><item><title><![CDATA[Sepultura anuncia show no Brasil &amp; turnê]]></title><link>https://example.com/article</link><pubDate>Wed, 28 Oct 2026 10:00:00 GMT</pubDate><source url="https://example.com">Produtora</source></item><item><title>Outra banda anuncia show</title><link>https://example.com/other</link></item></channel></rss>`;
   const results=newsItems(xml,"Sepultura","BR");
-  assert.equal(results.length,1);assert.equal(results[0].startsAt,"");assert.equal(results[0].status,"unverified");assert.equal(results[0].source,"Produtora");assert.ok(results[0].title.includes("& turnê"));
+  assert.equal(results.length,1);assert.equal(results[0].startsAt,"");assert.equal(results[0].status,"reported");assert.equal(results[0].publishedAt,'2026-10-28T10:00:00.000Z');assert.equal(results[0].source,"Produtora");assert.ok(results[0].title.includes("& turnê"));
 });
 test("A failed news feed does not prevent finding a Ticketmaster event",async()=>{
   const transport=async(url)=>{

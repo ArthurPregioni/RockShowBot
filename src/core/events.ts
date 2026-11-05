@@ -1,4 +1,5 @@
 import {normalize,webURL,todayInBrazil,COUNTRY_NAMES} from "./bot.ts";
+import {emailLayout,emailLink,htmlEscape} from './email.ts';
 
 export type StoredEvent={id:string;artist:string;title:string;country:string;city:string;starts_at:string;url:string;source:string;status:string;notified:number;identity_key?:string;published_at?:string;suppress_reason?:string;created_at?:string};
 export function canonicalCity(city:string,country:string){
@@ -64,8 +65,17 @@ export function renderAlert(id:string,events:StoredEvent[],website:string){
   const statuses=new Set(events.map(event=>event.status));
   if(!events.length||statuses.size!==1||!['listed','unverified'].includes(events[0].status))throw new Error("Separe shows confirmados e rumores antes de preparar o e-mail.");
   const groups=groupAlerts(events),confirmed=events[0].status==="listed";
-  const lines=[confirmed?`RockShowBot — ${groups.length} show(s) confirmado(s).`:`RockShowBot — ${groups.length} possibilidade(s) NÃO CONFIRMADA(S).`,"","Somente informações ainda não notificadas. Datas diferentes do mesmo artista são shows distintos.","",confirmed?"SHOWS CONFIRMADOS — fonte oficial ou provedor de eventos":"RUMORES E ANTECIPAÇÕES — NÃO CONFIRMADOS"];
-  for(const item of groups){const date=item.date?item.date.split("-").reverse().join("/"):"sem data confirmada";lines.push(`- ${confirmed?"":"NÃO CONFIRMADO — "}${date} — ${item.artists.join(" + ")} — ${item.city?item.city+" / ":""}${COUNTRY_NAMES[item.country]||item.country}`,`  ${item.source}: ${item.url}`);}
+  const places=[...new Set(groups.map(item=>COUNTRY_NAMES[item.country]||item.country))].join(', '),artists=new Set(groups.flatMap(item=>item.artists)).size;
+  const title=confirmed?`${groups.length} show(s) confirmado(s) no seu radar`:`${groups.length} possibilidade(s) não confirmada(s)`;
+  const summary=`Novidades de ${artists} artista(s) em ${places}. ${confirmed?'Datas sustentadas por fonte oficial ou provedor de eventos.':'Antecipações de apresentações futuras; ainda não há confirmação oficial.'}`;
+  const lines=[title,summary,'',confirmed?'SHOWS CONFIRMADOS':'Possíveis shows — sem confirmação oficial'];
+  let content='';
+  for(const item of groups.slice(0,5)){
+    const date=item.date?item.date.split('-').reverse().join('/'):'sem data confirmada',location=[item.city,COUNTRY_NAMES[item.country]||item.country].filter(Boolean).join(' / '),headline=item.title.replace(/\s+-\s+[^-]+$/,'').slice(0,220);
+    lines.push(`\n${date} — ${item.artists.join(' + ')} — ${location}`,`${confirmed?'':headline+' · '}Fonte: ${item.source}.`);
+    content+=`<div style="border-top:1px solid #e5e6eb;padding:18px 0"><h2 style="font-size:18px;margin:0 0 8px">${htmlEscape(item.artists.join(' + '))}</h2><p style="margin:0 0 8px;color:#545867">${htmlEscape(date+' · '+location)}</p>${confirmed?'':`<p style="line-height:1.5;margin:8px 0">${htmlEscape(headline)}</p>`}<a href="${emailLink(item.url)}" style="color:#a02443;font-size:13px">Fonte: ${htmlEscape(item.source)}</a></div>`;
+  }
+  if(groups.length>5){const remaining=`Mais ${groups.length-5} novidade(s) disponíveis no painel.`;lines.push('',remaining);content+=`<p>${htmlEscape(remaining)}</p>`;}
   lines.push("",`Abrir o RockShowBot: ${website}`,`ID do resumo: ${id}`);
-  return {subject:`RockShowBot: ${groups.length} ${confirmed?"show(s) confirmado(s)":"possibilidade(s) não confirmada(s)"} [RSB-${id}]`,body:lines.join("\n"),...alertCounts(events)};
+  return {subject:`RockShowBot: ${groups.length} ${confirmed?"show(s) confirmado(s)":"possibilidade(s) não confirmada(s)"} [RSB-${id}]`,body:lines.join("\n"),html:emailLayout(title,summary,content,website,'ID do resumo: '+id),...alertCounts(events)};
 }

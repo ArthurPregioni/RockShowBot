@@ -1,11 +1,21 @@
 import {database,UserError} from "../../server/database.ts";
 import {normalize,digest,webURL,upcomingDate,todayInBrazil,type ShowEvent} from "../../core/bot.ts";
 import {findingStatus} from "../radar/sources.ts";
+import {concertNewsStatus} from '../../core/concert-evidence.ts';
 import {canonicalCity,canonicalURL,eventIdentity,preferredEvent,suppressReason,type StoredEvent} from "../../core/events.ts";
 
 export async function reconcileEvents(){
   const db=database();
-  const all=(await db.prepare("SELECT * FROM show_events WHERE status IN ('listed','reported','unverified')").all<StoredEvent>()).results;
+  const candidates=(await db.prepare("SELECT * FROM show_events WHERE status IN ('listed','reported','unverified')").all<StoredEvent>()).results;
+  const all:StoredEvent[]=[];
+  for(const event of candidates){
+    if(event.status==='unverified'){
+      const classification=concertNewsStatus(event.title,event.artist,event.country,event.source);
+      if(!classification){await db.prepare("UPDATE show_events SET status='irrelevant',suppress_reason='Notícia sem evidência suficiente de show futuro deste artista neste país.' WHERE id=?").bind(event.id).run();continue;}
+      if(classification==='reported'){await db.prepare("UPDATE show_events SET status='reported',suppress_reason='' WHERE id=?").bind(event.id).run();event.status='reported';}
+    }
+    all.push(event);
+  }
   const dateGroups=new Map<string,StoredEvent[]>();
   for(const event of all)if(event.starts_at){const key=[normalize(event.artist),event.country,event.starts_at].join("|");const group=dateGroups.get(key)||[];group.push(event);dateGroups.set(key,group);}
   for(const group of dateGroups.values()){
@@ -42,7 +52,12 @@ export async function storeEvents(input:ShowEvent[],artists:{name:string;normali
     let link:string;try{link=canonicalURL(webURL(event.url));}catch{continue;}if(link.length>2000)continue;
     const date=typeof event.startsAt==="string"?event.startsAt.slice(0,10):"";if(date&&!upcomingDate(date))continue;
     const published=typeof event.publishedAt==="string"&&/^\d{4}-\d{2}-\d{2}/.test(event.publishedAt)&&!Number.isNaN(Date.parse(event.publishedAt))?new Date(event.publishedAt).toISOString():"";
-    const status=findingStatus(event.status,date,String(event.source||""),link);
+    let status=findingStatus(event.status,date,String(event.source||""),link);
+    if(status==='unverified'){
+      const classification=concertNewsStatus(event.title,artist.name,event.country,String(event.source||''));
+      if(!classification)continue;
+      status=classification;
+    }
     const incoming:StoredEvent={id:"",artist:artist.name,title:event.title.slice(0,400),country:event.country,city:String(event.city||"").slice(0,160),starts_at:date,url:link,source:String(event.source||new URL(link).hostname).slice(0,200),status,notified:0,published_at:published};
     const db=database();let key=eventIdentity(incoming);
     let existing=await db.prepare("SELECT * FROM show_events WHERE identity_key=?").bind(key).first<StoredEvent>();

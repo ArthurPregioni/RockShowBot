@@ -6,6 +6,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {createServer} from 'node:net';
 import path from 'node:path';
+import {SQLiteBinding} from '../../deploy/node/database.mjs';
 const temporary=mkdtempSync(path.join(tmpdir(),'rockshowbot-node-qa-'));
 const reservation=createServer();await new Promise(resolve=>reservation.listen(0,'127.0.0.1',resolve));const port=reservation.address().port;await new Promise(resolve=>reservation.close(resolve));
 const base=`http://127.0.0.1:${port}`;
@@ -38,6 +39,16 @@ try{
  await login(anonymous,'arthur','wrong',401);
  await login(owner,'arthur','qa-only-long-password-123');
  await api(owner,'/api/artists',{name:band});
+ // Old false positives are archived, preserving sent flags and receipt history.
+ const legacy=new SQLiteBinding(path.join(temporary,'web.db'));
+ legacy.connection.prepare("INSERT INTO show_events(id,artist,title,country,url,source,status,notified) VALUES('legacy-news',?,?,?,'https://news.example/old','Jornal','unverified',1)").run(band,band+' cancela show na Coreia do Sul','BR');
+ assert.ok(!(await(await api(owner,'/api/dashboard')).json()).events.some(e=>e.id==='legacy-news'));
+ const archived=legacy.connection.prepare("SELECT status,notified FROM show_events WHERE id='legacy-news'").get();assert.equal(archived.status,'irrelevant');assert.equal(archived.notified,1);legacy.connection.close();
+ const falseNews={artist:band,title:band+' anuncia show no Brasil',country:'AR',city:'',startsAt:'',url:'https://news.example/wrong-country',source:'Jornal',status:'unverified'};
+ assert.equal((await(await api(owner,'/api/events',{events:[falseNews]})).json()).added,0);
+ const realRumor={...falseNews,title:band+' pode fazer show no Brasil',country:'BR',url:'https://news.example/rumor'};
+ assert.equal((await(await api(owner,'/api/events',{events:[realRumor]})).json()).added,1);
+ assert.ok((await(await api(owner,'/api/dashboard')).json()).events.some(e=>e.artist===band&&e.status==='unverified'));
  const signup={username:'signup'+stamp,email:'new@example.test',password:'registration-qa-password-long',confirmation:'registration-qa-password-long',role:'admin'};
  const invalid=async(form,origin=base,status=400)=>{
   const r=await anonymous.request.post(base+'/register',{headers:{Origin:origin},form});assert.equal(r.status(),status);return r;

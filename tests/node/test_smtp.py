@@ -11,6 +11,7 @@ class FakeSMTP:
         self.events.append('auth')
         if self.auth_error:raise smtplib.SMTPAuthenticationError(535,b'rejected')
     def send_message(self,message):
+        self.message=message
         self.events.append('data')
         if self.send_error:raise self.send_error
         return {}
@@ -24,7 +25,13 @@ class SMTPTests(unittest.TestCase):
         self.assertFalse(result['uncertain']);self.assertEqual(result['error'],'authentication');self.assertNotIn('data',client.events)
     def test_smtp_acceptance_records_the_real_message_id(self):
         client=FakeSMTP();result=transport.deliver({'to':'recipient@example.test','subject':'QA','body':'Synthetic QA'},CONFIG,lambda *_:client)
-        self.assertTrue(result['accepted']);self.assertIn('@rockshowbot.local',result['messageId']);self.assertIn('data',client.events)
+        self.assertTrue(result['accepted']);self.assertIn('@example.test',result['messageId']);self.assertTrue(client.message['Date']);self.assertIn('data',client.events)
+    def test_html_digest_has_a_plain_text_alternative_and_real_sender_domain(self):
+        client=FakeSMTP();message={'id':'qa-only-id','to':'recipient@example.test','subject':'QA','body':'Text summary','html':'<p>HTML summary</p>'}
+        result=transport.deliver(message,CONFIG,lambda *_:client)
+        self.assertTrue(result['accepted']);self.assertEqual(client.message.get_content_type(),'multipart/alternative')
+        self.assertEqual([p.get_content_type() for p in client.message.iter_parts()],['text/plain','text/html'])
+        self.assertEqual(client.message['X-RockShowBot-Delivery-ID'],'qa-only-id');self.assertIn('@example.test',result['messageId'])
     def test_disconnect_during_data_is_ambiguous_but_explicit_rejection_is_not(self):
         message={'to':'recipient@example.test','subject':'QA','body':'Synthetic QA'}
         ambiguous=transport.deliver(message,CONFIG,lambda *_:FakeSMTP(send_error=smtplib.SMTPServerDisconnected('lost')))

@@ -12,7 +12,7 @@ try{
  // A country unused by the local development fixtures isolates this flow without deleting user data.
  await post('settings',{email:'qa-alerts@example.test',notifications:true,countries:['SR']});
  for(const band of [name,name+' Cohead',name+' Later'])await post('artists',{name:band});
- const tip={artist:name,title:'Possível turnê',country:'SR',city:'',startsAt:'',url:'https://www.youtube.com/watch?v=abcdefghijk&qa='+encodeURIComponent(name),source:'José Norberto Flesch',status:'unverified'};
+ const tip={artist:name,title:name+' pode fazer show no Suriname',country:'SR',city:'',startsAt:'',url:'https://www.youtube.com/watch?v=abcdefghijk&qa='+encodeURIComponent(name),source:'José Norberto Flesch',status:'unverified'};
  await post('events',{events:[tip]});let delivery=(await post('automation/alerts/prepare',{})).delivery;assert.ok(delivery);assert.equal(delivery.possibilities,1);
  const claims=await Promise.all([client.request.post(base+'/api/automation/alerts/claim',{data:{id:delivery.id}}),client.request.post(base+'/api/automation/alerts/claim',{data:{id:delivery.id}})]);assert.deepEqual(claims.map(r=>r.status()).sort(),[200,409]);
  await post('automation/alerts/ack',{id:delivery.id,messageId:'LOCAL-QA-NO-EMAIL-1'});assert.equal((await post('automation/alerts/prepare',{})).delivery,null);

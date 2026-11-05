@@ -5,14 +5,14 @@ import {digest} from "../../core/bot.ts";
 import {eventIdentity,eventRevision,notificationIdentity,sharedNotificationIdentity,canonicalReceiptRevision,alertBatch,alertCounts,renderAlert,type StoredEvent} from "../../core/events.ts";
 
 type Snapshot=StoredEvent&{receiptId:string;revision:string;key:string};
-type Delivery={id:string;recipient:string;batch_key:string;status:string;subject:string;body:string;snapshot:string;message_id:string;last_error:string;created_at:string;sent_at:string|null};
-const deliveryView=(row:Delivery)=>{const counts=alertCounts(JSON.parse(row.snapshot));return {id:row.id,status:row.status,to:row.recipient,subject:row.subject,body:row.body,messageId:row.message_id,lastError:row.last_error,count:counts.count,concerts:counts.concerts,possibilities:counts.possibilities};};
+type Delivery={id:string;recipient:string;batch_key:string;status:string;subject:string;body:string;html:string;snapshot:string;message_id:string;last_error:string;created_at:string;sent_at:string|null};
+const deliveryView=(row:Delivery)=>{const counts=alertCounts(JSON.parse(row.snapshot));return {id:row.id,status:row.status,to:row.recipient,subject:row.subject,body:row.body,html:row.html,messageId:row.message_id,lastError:row.last_error,count:counts.count,concerts:counts.concerts,possibilities:counts.possibilities};};
 export async function pendingAlerts(){
   const preferences=await settings();if(!preferences.notifications||!preferences.email)return [];
   const recipient=preferences.email.trim().toLowerCase(),db=database();
   const visible=await visibleEvents(JSON.parse(preferences.countries),10000);
   // Preserve legacy delivery flags without inventing Gmail IDs or historical send times.
-  const legacy=(await db.prepare("SELECT * FROM show_events WHERE notified=1 AND status<>'duplicate'").all<StoredEvent>()).results;
+  const legacy=(await db.prepare("SELECT * FROM show_events WHERE notified=1 AND status NOT IN ('duplicate','irrelevant')").all<StoredEvent>()).results;
   for(let offset=0;offset<legacy.length;offset+=40){
     const statements=await Promise.all(legacy.slice(offset,offset+40).flatMap(event=>[notificationIdentity(event),sharedNotificationIdentity(event)].map(async identity=>db.prepare("INSERT OR IGNORE INTO alert_receipts(id,event_key,revision,recipient,kind) VALUES(?,?,?,?, 'legacy-notified')").bind(await digest(recipient+"|"+identity),eventIdentity(event),eventRevision(event),recipient))));
     if(statements.length)await db.batch(statements);
@@ -40,7 +40,7 @@ export async function prepareAlert(){
   }
   if(!items.length)return {delivery:null};
   const id=crypto.randomUUID(),batchKey=await digest(recipient+"|"+items.map(item=>item.receiptId).sort().join("|")+"|"+id),message=renderAlert(id,items,siteOrigin());
-  await db.prepare("INSERT OR IGNORE INTO alert_deliveries(id,recipient,batch_key,subject,body,snapshot) VALUES(?,?,?,?,?,?)").bind(id,recipient,batchKey,message.subject,message.body,JSON.stringify(items)).run();
+  await db.prepare("INSERT OR IGNORE INTO alert_deliveries(id,recipient,batch_key,subject,body,html,snapshot) VALUES(?,?,?,?,?,?,?)").bind(id,recipient,batchKey,message.subject,message.body,message.html,JSON.stringify(items)).run();
   const row=await db.prepare("SELECT * FROM alert_deliveries WHERE recipient=? AND status IN ('pending','claimed','unknown') LIMIT 1").bind(recipient).first<Delivery>();
   return {delivery:row?deliveryView(row):null,needsReconciliation:row?row.status!=="pending":false};
 }

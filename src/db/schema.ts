@@ -33,7 +33,7 @@ export const events = sqliteTable("show_events", {
 
 export const alertDeliveries=sqliteTable("alert_deliveries",{
   id:text("id").primaryKey(),recipient:text("recipient").notNull(),batchKey:text("batch_key").notNull().unique(),
-  status:text("status").notNull().default("pending"),subject:text("subject").notNull(),body:text("body").notNull(),snapshot:text("snapshot").notNull(),
+  status:text("status").notNull().default("pending"),subject:text("subject").notNull(),body:text("body").notNull(),html:text("html").notNull().default(''),snapshot:text("snapshot").notNull(),
   messageId:text("message_id").notNull().default(""),lastError:text("last_error").notNull().default(""),
   createdAt:text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),sentAt:text("sent_at"),
 },table=>[uniqueIndex("one_active_alert_delivery").on(table.recipient).where(sql`${table.status} IN ('pending','claimed','unknown')`)]);

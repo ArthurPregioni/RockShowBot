@@ -1,6 +1,6 @@
-export function normalize(value: string) {
-  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-}
+import {normalize} from './text.ts';
+import {concertNewsStatus} from './concert-evidence.ts';
+export {normalize} from './text.ts';
 // Concert dates use the dashboard's reference timezone, independently of publication dates.
 export function todayInBrazil(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(now);
@@ -83,9 +83,11 @@ export function newsItems(xml: string, artist: string, country: string): ShowEve
   for (const match of xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/g)) {
     const get = (tag: string) => decodeXML(match[1].match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`))?.[1] || "").trim();
     const title = get("title"), link = get("link");
-    if (!(` ${normalize(title)} `).includes(` ${normalize(artist)} `) || !/\b(show|shows|turne|tour|concierto|concertos?|festival|festivais)\b/.test(normalize(title))) continue;
+    const source=get('source')||'Google News',status=concertNewsStatus(title,artist,country,source);
+    if(!status)continue;
     try { webURL(link); } catch { continue; }
-    results.push({ artist, title, country, city: "", startsAt: "", url: link, source: get("source") || "Google News", status: "unverified" });
+    const published=Date.parse(get('pubDate'));
+    results.push({ artist, title, country, city: "", startsAt: "", url: link, source, status,...(Number.isNaN(published)?{}:{publishedAt:new Date(published).toISOString()}) });
     if (results.length === 5) break;
   }
   return results;

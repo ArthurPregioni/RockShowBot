@@ -1,7 +1,7 @@
 """SMTP transport and authentication-only check; private configuration from env."""
 import json,os,smtplib,ssl,sys
 from email.message import EmailMessage
-from email.utils import make_msgid
+from email.utils import make_msgid,formatdate,parseaddr
 
 
 def deliver(message,config=None,factory=None):
@@ -26,8 +26,13 @@ def deliver(message,config=None,factory=None):
         mail=EmailMessage()
         mail['Subject']=message['subject'];mail['To']=message['to']
         mail['From']=config.get('SMTP_FROM') or config.get('SMTP_USERNAME')
-        mail['Message-ID']=make_msgid(domain='rockshowbot.local')
+        address=parseaddr(mail['From'])[1]
+        domain=address.rsplit('@',1)[-1] if '@' in address else None
+        mail['Date']=formatdate(usegmt=True)
+        mail['Message-ID']=make_msgid(domain=domain)
+        if message.get('id'):mail['X-RockShowBot-Delivery-ID']=message['id']
         mail.set_content(message['body'])
+        if message.get('html'):mail.add_alternative(message['html'],subtype='html')
         stage='data'
         rejected=client.send_message(mail)
         if rejected:return {'accepted':False,'uncertain':False,'error':'recipient-rejected'}

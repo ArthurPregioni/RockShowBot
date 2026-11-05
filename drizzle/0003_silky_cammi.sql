@@ -1,0 +1,1 @@
+ALTER TABLE `alert_deliveries` ADD `html` text DEFAULT '' NOT NULL;
