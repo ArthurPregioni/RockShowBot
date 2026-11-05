@@ -66,8 +66,9 @@ export function renderAlert(id:string,events:StoredEvent[],website:string){
   if(!events.length||statuses.size!==1||!['listed','unverified'].includes(events[0].status))throw new Error("Separe shows confirmados e rumores antes de preparar o e-mail.");
   const groups=groupAlerts(events),confirmed=events[0].status==="listed";
   const places=[...new Set(groups.map(item=>COUNTRY_NAMES[item.country]||item.country))].join(', '),artists=new Set(groups.flatMap(item=>item.artists)).size;
-  const title=confirmed?`${groups.length} show(s) confirmado(s) no seu radar`:`${groups.length} possibilidade(s) não confirmada(s)`;
-  const summary=`Novidades de ${artists} artista(s) em ${places}. ${confirmed?'Datas sustentadas por fonte oficial ou provedor de eventos.':'Antecipações de apresentações futuras; ainda não há confirmação oficial.'}`;
+  const description=confirmed?(groups.length===1?'show confirmado':'shows confirmados'):(groups.length===1?'possibilidade não confirmada':'possibilidades não confirmadas');
+  const title=`${groups.length} ${description}${confirmed?' no seu radar':''}`;
+  const summary=`${artists} ${artists===1?'artista':'artistas'} · ${places}. ${confirmed?'Datas sustentadas por fonte oficial ou provedor de eventos.':'Antecipações de apresentações futuras; ainda não há confirmação oficial.'}`;
   const lines=[title,summary,'',confirmed?'SHOWS CONFIRMADOS':'Possíveis shows — sem confirmação oficial'];
   let content='';
   for(const item of groups.slice(0,5)){
@@ -75,7 +76,7 @@ export function renderAlert(id:string,events:StoredEvent[],website:string){
     lines.push(`\n${date} — ${item.artists.join(' + ')} — ${location}`,`${confirmed?'':headline+' · '}Fonte: ${item.source}.`);
     content+=`<div style="border-top:1px solid #e5e6eb;padding:18px 0"><h2 style="font-size:18px;margin:0 0 8px">${htmlEscape(item.artists.join(' + '))}</h2><p style="margin:0 0 8px;color:#545867">${htmlEscape(date+' · '+location)}</p>${confirmed?'':`<p style="line-height:1.5;margin:8px 0">${htmlEscape(headline)}</p>`}<a href="${emailLink(item.url)}" style="color:#a02443;font-size:13px">Fonte: ${htmlEscape(item.source)}</a></div>`;
   }
-  if(groups.length>5){const remaining=`Mais ${groups.length-5} novidade(s) disponíveis no painel.`;lines.push('',remaining);content+=`<p>${htmlEscape(remaining)}</p>`;}
+  if(groups.length>5){const n=groups.length-5,remaining=`Mais ${n} ${n===1?'novidade disponível':'novidades disponíveis'} no painel.`;lines.push('',remaining);content+=`<p>${htmlEscape(remaining)}</p>`;}
   lines.push("",`Abrir o RockShowBot: ${website}`,`ID do resumo: ${id}`);
-  return {subject:`RockShowBot: ${groups.length} ${confirmed?"show(s) confirmado(s)":"possibilidade(s) não confirmada(s)"} [RSB-${id}]`,body:lines.join("\n"),html:emailLayout(title,summary,content,website,'ID do resumo: '+id),...alertCounts(events)};
+  return {subject:`RockShowBot: ${groups.length} ${description} [RSB-${id}]`,body:lines.join("\n"),html:emailLayout(title,summary,content,website,'ID do resumo: '+id),...alertCounts(events)};
 }
