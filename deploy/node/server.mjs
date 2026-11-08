@@ -3,6 +3,7 @@ import {parseEnv} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
+import {clientIdentity} from './proxy-identity.mjs';
 import {mailHTML,saveMailConfig} from './mail-config.mjs';
 import {accountStore,accountHTML} from './accounts.mjs';
 import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML,signupHTML} from './session.mjs';
@@ -74,7 +75,7 @@ server.on('request',async(req,res)=>{
   if(url.pathname==='/login'){
    if(req.method==='GET'){if(owner)redirect(res,safeReturn(url.searchParams.get('return_to')));else html(res,200,loginPage('',url.searchParams.get('return_to')));return;}
    if(req.method!=='POST'){html(res,405,'Método inválido.');return;}
-   const key=req.socket.remoteAddress,bucket=attempts.get(key)||{count:0,until:Date.now()+600000};
+   const key=clientIdentity(req,process.env.ROCKSHOWBOT_PROXY_KEY),bucket=attempts.get(key)||{count:0,until:Date.now()+600000};
    if(bucket.until<Date.now()){bucket.count=0;bucket.until=Date.now()+600000;}
    attempts.set(key,bucket);if(bucket.count>=10){html(res,429,loginPage('Muitas tentativas. Aguarde dez minutos.'));return;}
    let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}

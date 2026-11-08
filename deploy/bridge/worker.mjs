@@ -34,7 +34,13 @@ export async function handleBridge(request,env,fetcher=fetch){
  }
  const upstream=new URL(request.url);upstream.protocol='https:';upstream.host=new URL(origin).host;
  const upstreamHeaders=new Headers(request.headers);
- for(const name of ['host','connection','proxy-connection','transfer-encoding'])upstreamHeaders.delete(name);
+ for(const name of [...upstreamHeaders.keys()])if(/^x-hub-|^x-forwarded-|^forwarded$|^host$|^connection$|^proxy-connection$|^transfer-encoding$/i.test(name))upstreamHeaders.delete(name);
+ if(env.ORIGIN_PROXY_KEY){upstreamHeaders.set('X-Hub-Service','rockshowbot');upstreamHeaders.set('X-Hub-Proxy-Key',env.ORIGIN_PROXY_KEY);upstreamHeaders.set('X-Hub-Client-IP',request.headers.get('CF-Connecting-IP')||'');}
+
+ upstreamHeaders.set('X-Hub-Country',/^[A-Z]{2}$/.test(request.cf?.country||'')?request.cf.country:'??');
+ upstreamHeaders.set('X-Hub-City',encodeURIComponent(String(request.cf?.city||'').slice(0,80)));
+ upstreamHeaders.set('X-Hub-ASN',String(request.cf?.asn||''));
+ upstreamHeaders.set('X-Hub-Network',encodeURIComponent(String(request.cf?.asOrganization||'').slice(0,100)));
  // Do not follow an upstream redirect with cookies or authorization attached.
  const forwarded=new Request(new Request(upstream,request),{headers:upstreamHeaders,redirect:'manual'});
  let response;try{response=await fetcher(forwarded,{cache:'no-store'});}catch{

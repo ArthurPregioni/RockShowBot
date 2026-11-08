@@ -27,7 +27,9 @@ if settings:threading.Thread(target=publisher,daemon=True).start()
 def shutdown(_number,_frame):raise SystemExit(0)
 signal.signal(signal.SIGTERM,shutdown)
 signal.signal(signal.SIGINT,shutdown)
-process=subprocess.Popen(['cloudflared','tunnel','--url','http://127.0.0.1:8765','--protocol','http2','--no-autoupdate'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+transport_port=int((config.parent/'transport-port.txt').read_text().strip()) if (config.parent/'transport-port.txt').exists() else 8765
+if transport_port not in (8765,8791):raise ValueError('Porta de transporte inválida.')
+process=subprocess.Popen(['cloudflared','tunnel','--url','http://127.0.0.1:'+str(transport_port),'--protocol','http2','--no-autoupdate'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
 previous=None
 try:
  for line in process.stdout:

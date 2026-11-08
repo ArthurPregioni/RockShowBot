@@ -35,3 +35,11 @@ test('Worker entrypoint ignores the runtime context argument and serves actual u
  t.mock.method(globalThis,'fetch',async()=>new Response('phone content'));
  assert.equal(await(await worker.fetch(new Request(base+'/'),env,{waitUntil(){}})).text(),'phone content');
 });
+
+test('Bridge authenticates gateway metadata and removes client supplied identity',async()=>{
+ const env=environment();env.ORIGIN_PROXY_KEY='synthetic-gateway-secret-key-for-monitoring';env.values.set('origin','https://valid.trycloudflare.com');
+ const request=new Request(base+'/login',{headers:{'CF-Connecting-IP':'203.0.113.8','X-Hub-Country':'US','X-Hub-Proxy-Key':'fake','X-Hub-Client-IP':'fake'}});
+ Object.defineProperty(request,'cf',{value:{country:'BR',city:'Rio de Janeiro',asn:12345,asOrganization:'Test ISP'}});
+ const response=await handleBridge(request,env,async req=>{assert.equal(req.headers.get('X-Hub-Service'),'rockshowbot');assert.equal(req.headers.get('X-Hub-Proxy-Key'),env.ORIGIN_PROXY_KEY);assert.equal(req.headers.get('X-Hub-Client-IP'),'203.0.113.8');assert.equal(req.headers.get('X-Hub-Country'),'BR');assert.equal(req.headers.get('X-Hub-ASN'),'12345');return new Response('ok')});
+ assert.equal(response.status,200);
+});
