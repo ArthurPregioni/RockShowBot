@@ -3,10 +3,12 @@ import {parseEnv} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
+import {loginThrottle} from './login-throttle.mjs';
+import {PERSONAL_COOKIE,personalAccessConfig,personalCookie,personalOwner} from './personal-access.mjs';
 import {clientIdentity} from './proxy-identity.mjs';
 import {mailHTML,saveMailConfig} from './mail-config.mjs';
 import {accountStore,accountHTML} from './accounts.mjs';
-import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML,signupHTML} from './session.mjs';
+import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML,signupHTML,SESSION_SECONDS} from './session.mjs';
 
 if(process.env.ROCKSHOWBOT_ENV_FILE){const values=parseEnv(readFileSync(process.env.ROCKSHOWBOT_ENV_FILE,'utf8'));for(const [key,value]of Object.entries(values))process.env[key]=value;}
 const root=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
@@ -20,7 +22,8 @@ process.env.ROCKSHOWBOT_SITE_ORIGIN=origin.origin;
 const {localDatabase,runForOwner}=await import('./runtime.mjs');
 const binding=localDatabase();binding.migrate(path.join(root,'drizzle'));
 const accounts=accountStore(binding.connection);accounts.initialize(username,process.env.ADMIN_EMAIL||`${username}@localhost`,encoded);
-const sessions=sessionStore(binding.connection),attempts=new Map();
+const sessions=sessionStore(binding.connection),throttle=loginThrottle(binding.connection);
+const personal=personalAccessConfig(origin);
 const registrationEnabled=process.env.ROCKSHOWBOT_REGISTRATION_ENABLED!=='false';
 const loginPage=(error='',returnTo='/')=>loginHTML(error,returnTo,registrationEnabled);
 let registrations={count:0,until:Date.now()+3600000};
@@ -34,25 +37,36 @@ const {server,port}=await startProdServer({port:Number(process.env.PORT||8765),h
 const handlers=server.listeners('request');server.removeAllListeners('request');
 const html=(res,status,body,extra={})=>{res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Content-Security-Policy':"frame-ancestors 'none'",...extra});res.end(body);};
 const redirect=(res,to,cookie)=>{res.writeHead(303,{'Location':to,'Cache-Control':'no-store',...(cookie?{'Set-Cookie':cookie}:{})});res.end();};
-const cookie=(token,clear=false)=>`${sessionCookie}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${clear?0:604800}${origin.protocol==='https:'?'; Secure':''}`;
+const cookie=(token,clear=false)=>`${sessionCookie}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${clear?0:SESSION_SECONDS}${origin.protocol==='https:'?'; Secure':''}`;
 server.on('request',async(req,res)=>{
  try{
   const url=new URL(req.url,'http://localhost');
   // Strip identity asserted by callers before adding this server's verified owner.
   for(const key of Object.keys(req.headers))if(key.startsWith('oai-authenticated-user-'))delete req.headers[key];
-  const token=cookies(req.headers.cookie)[sessionCookie],owner=sessions.find(token);
+  const browserCookies=cookies(req.headers.cookie);
+  const token=browserCookies[sessionCookie]||browserCookies[PERSONAL_COOKIE],owner=sessions.find(token);
   let account=owner?accounts.find(owner):null;
   const internal=req.headers.authorization===`Bearer ${schedulerToken}`&&['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  const renew=account&&!internal&&sessions.touch(token);
+  if(renew)res.setHeader('Set-Cookie',personal&&personalOwner(account)?[cookie(token),personalCookie(personal,token)]:cookie(token));
   if(internal)account=accounts.byId(req.headers['x-rockshowbot-owner']||'local-owner');
   if(url.pathname==='/healthz'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({app:'RockShowBot',backend:'node',ok:true}));return;}
   if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!internal){
    const allowed=new Set([origin.origin,`http://127.0.0.1:${port}`,`http://localhost:${port}`]);
    if(!allowed.has(req.headers.origin)){html(res,403,'Origem da requisição inválida.');return;}
   }
+  if(url.pathname==='/personal/access'){
+   if(!personal||req.method!=='GET'){html(res,404,'Página não encontrada.');return;}
+   if(!account){redirect(res,'/login?return_to='+encodeURIComponent(safeReturn(req.url)));return;}
+   if(!personalOwner(account)){html(res,403,'Os hubs pessoais são restritos à conta proprietária.');return;}
+   const target=personal.targets[url.searchParams.get('service')];
+   if(!target){html(res,400,'Central inválida.');return;}
+   redirect(res,target,[cookie(token),personalCookie(personal,token)]);return;
+  }
   if(url.pathname==='/signin-with-chatgpt'){redirect(res,'/login?return_to='+encodeURIComponent(safeReturn(url.searchParams.get('return_to'))));return;}
   if(url.pathname==='/signout-with-chatgpt'){
    if(req.method!=='POST'){html(res,200,'<form method="post"><button>Sair do RockShowBot</button></form>');return;}
-   sessions.revoke(token);redirect(res,'/login',cookie('',true));return;
+   sessions.revoke(token);if(personal)sessions.revoke(browserCookies[PERSONAL_COOKIE]);redirect(res,'/login',personal?[cookie('',true),personalCookie(personal,'',true)]:cookie('',true));return;
   }
   if(url.pathname==='/register'){
    if(!registrationEnabled){html(res,403,loginPage('O cadastro está fechado. Peça uma conta ao administrador.'));return;}
@@ -69,20 +83,23 @@ server.on('request',async(req,res)=>{
     const email=(form.get('email')||'').trim().toLowerCase();
     const created=await accounts.create((form.get('username')||'').trim(),email,password);
     initializeRadar(created,email);
-    redirect(res,'/',cookie(sessions.create(created.username)));return;
+    if(personal)sessions.revoke(browserCookies[PERSONAL_COOKIE]);
+    redirect(res,'/',personal?[cookie(sessions.create(created.username,req.headers['user-agent'])),personalCookie(personal,'',true)]:cookie(sessions.create(created.username,req.headers['user-agent'])));return;
    }catch(error){html(res,400,signupHTML(error.message));return;}
   }
   if(url.pathname==='/login'){
    if(req.method==='GET'){if(owner)redirect(res,safeReturn(url.searchParams.get('return_to')));else html(res,200,loginPage('',url.searchParams.get('return_to')));return;}
    if(req.method!=='POST'){html(res,405,'Método inválido.');return;}
-   const key=clientIdentity(req,process.env.ROCKSHOWBOT_PROXY_KEY),bucket=attempts.get(key)||{count:0,until:Date.now()+600000};
-   if(bucket.until<Date.now()){bucket.count=0;bucket.until=Date.now()+600000;}
-   attempts.set(key,bucket);if(bucket.count>=10){html(res,429,loginPage('Muitas tentativas. Aguarde dez minutos.'));return;}
+   const key=clientIdentity(req,process.env.ROCKSHOWBOT_PROXY_KEY),wait=throttle.remaining(key);
+   if(wait){html(res,429,loginPage('Muitas tentativas. Aguarde '+wait+' segundos.'),{'Retry-After':String(wait)});return;}
    let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}
-   const form=new URLSearchParams(body);bucket.count++;
+   const form=new URLSearchParams(body);
    const candidate=accounts.find(form.get('username')||'');
-   if(!candidate||!await verifyPassword(form.get('password')||'',candidate.password_hash)){html(res,401,loginPage('Usuário ou senha incorretos.',form.get('return_to')));return;}
-   attempts.delete(key);redirect(res,safeReturn(form.get('return_to')),cookie(sessions.create(candidate.username)));return;
+   if(!candidate||!await verifyPassword(form.get('password')||'',candidate.password_hash)){throttle.failed(key);html(res,401,loginPage('Usuário ou senha incorretos.',form.get('return_to')));return;}
+   throttle.success(key);
+   if(personal)sessions.revoke(browserCookies[PERSONAL_COOKIE]);
+   const signedIn=sessions.create(candidate.username,req.headers['user-agent']);
+   redirect(res,safeReturn(form.get('return_to')),personal?[cookie(signedIn),personalCookie(personal,personalOwner(candidate)?signedIn:'',!personalOwner(candidate))]:cookie(signedIn));return;
   }
   if(!account){
    if(url.pathname.startsWith('/api/')){res.writeHead(401,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'Entre na sua conta para continuar.'}));}
@@ -105,12 +122,12 @@ server.on('request',async(req,res)=>{
       if(!await verifyPassword(form.get('current')||'',account.password_hash))throw new Error('Senha atual incorreta.');
       await accounts.changePassword(account.id,form.get('password')||'');
       binding.connection.prepare('DELETE FROM node_sessions WHERE username=?').run(account.username);
-      redirect(res,'/login',cookie('',true));return;
+      redirect(res,'/login',personal?[cookie('',true),personalCookie(personal,'',true)]:cookie('',true));return;
      }
     }catch(error){html(res,400,url.pathname==='/admin/email'?mailHTML(error.message):accountHTML(accounts.list(),account.role==='admin',error.message));return;}
    }
    if(url.pathname==='/admin/email'){html(res,200,mailHTML());return;}
-   html(res,200,accountHTML(accounts.list(),account.role==='admin',notice));return;
+   html(res,200,accountHTML(accounts.list(),account.role==='admin',notice,personal&&personalOwner(account)?personal.targets:null));return;
   }
   req.headers['oai-authenticated-user-id']=account.id;
   req.headers['oai-authenticated-user-email']=account.email;
