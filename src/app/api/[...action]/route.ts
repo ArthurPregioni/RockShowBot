@@ -6,6 +6,7 @@ import { musicAction } from "../../../features/music/imports";
 import { sourcesForCountries } from "../../../features/radar/sources";
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "../../../server/auth";
+import { publicMessage } from "../../../server/errors";
 import { appleConfiguration, appleLibrary, digest, todayInBrazil, type Candidate, type ShowEvent } from "../../../core/bot";
 import { addArtist, dashboard, database, scan, scanOfficialSources, settings, siteOrigin, saveEvents, UserError, watchlist } from "../../../server/bot";
 
@@ -78,7 +79,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
     }
     if(action==="automation/migration/destination"){
       if(import.meta.env.ROCKSHOWBOT_STANDALONE==="true"||!migrated||body.confirm!=="update-migration-destination")throw new UserError('Alteração do destino inválida.',409);
-      let destination:string;try{destination=migrationDestination(body.destination);}catch(error){throw new UserError((error as Error).message);}
+      let destination:string;try{destination=migrationDestination(body.destination);}catch(error){throw new UserError(publicMessage(error,'Informe a URL HTTPS do novo servidor.'));}
       await database().prepare("UPDATE bot_settings SET schedule=?,notifications=0 WHERE id=1 AND schedule LIKE 'migrated:%'").bind('migrated:'+destination).run();
       return json({updated:true,destination});
     }
@@ -141,7 +142,7 @@ async function handle(request: Request, context: {params: Promise<{action:string
         return json({candidates});
       } catch (error) {
         await database().prepare("DELETE FROM music_imports WHERE id=?").bind(session.id).run();
-        throw new UserError((error as Error).message || "Não foi possível consultar sua biblioteca Apple Music.");
+        throw new UserError(publicMessage(error,"Não foi possível consultar sua biblioteca Apple Music."));
       }
     }
     if (action === "apple/import") {

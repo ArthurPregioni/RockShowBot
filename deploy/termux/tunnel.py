@@ -1,7 +1,7 @@
 """Keep the phone reachable through an optional fixed public HTTPS address."""
-import os,re,signal,subprocess,sys,threading,queue
+import os,signal,subprocess,sys,threading,queue
 from pathlib import Path
-from bridge import bridge_settings,publish_origin,configure_origin
+from bridge import bridge_settings,publish_origin,configure_origin,tunnel_url
 config=Path.home()/'.config/rockshowbot/node.env'
 settings=bridge_settings(config.parent)
 updates=queue.Queue();stopped=threading.Event()
@@ -34,9 +34,9 @@ previous=None
 try:
  for line in process.stdout:
   print(line,end='',flush=True)
-  match=re.search(r'https://[a-z0-9-]+\.trycloudflare\.com',line)
-  if match and match.group()!=previous:
-   url=match.group();previous=url
+  url=tunnel_url(line)
+  if url and url!=previous:
+   previous=url
    if configure_origin(config,url,settings):
     subprocess.run(['sv','-w','20','restart',str(Path(os.environ['PREFIX'])/'var/service/rockshowbot-web')],check=True)
    if settings:updates.put(url)

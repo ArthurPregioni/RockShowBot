@@ -10,6 +10,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import safe_urlopen
+
 
 class AppleMusicError(ValueError):
     pass
@@ -52,7 +54,7 @@ def configuration():
 
 def request_json(request):
     try:
-        with urllib.request.urlopen(request, timeout=25) as response:
+        with safe_urlopen(request, timeout=25) as response:
             return json.load(response)
     except urllib.error.HTTPError as exc:
         status = exc.code

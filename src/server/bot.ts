@@ -39,6 +39,13 @@ export async function saveEvents(input:ShowEvent[]) {
   const [artists,preferences]=await Promise.all([watchlist(),settings()]);
   return storeEvents(input,artists,JSON.parse(preferences.countries));
 }
+// Every scan request adds a run and the dashboard reads only the latest, so keep a bounded recent history.
+async function recordRun(added:number,warnings:string[]) {
+  await database().batch([
+    database().prepare("INSERT INTO scan_runs(id,new_events,warnings) VALUES(?,?,?)").bind(crypto.randomUUID(),added,JSON.stringify(warnings)),
+    database().prepare("DELETE FROM scan_runs WHERE rowid NOT IN (SELECT rowid FROM scan_runs ORDER BY rowid DESC LIMIT 500)"),
+  ]);
+}
 export async function scan(offset = 0) {
   if (!Number.isInteger(offset) || offset < 0) throw new UserError("Posição de busca inválida.");
   const [artists, preferences] = await Promise.all([watchlist(), settings()]);
@@ -55,7 +62,7 @@ export async function scan(offset = 0) {
   }
   await database().prepare("DELETE FROM show_events WHERE starts_at<>'' AND starts_at<date('now','-30 day')").run();
   await database().prepare("DELETE FROM show_events WHERE starts_at='' AND created_at<datetime('now','-60 day')").run();
-  await database().prepare("INSERT INTO scan_runs(id,new_events,warnings) VALUES(?,?,?)").bind(crypto.randomUUID(), added, JSON.stringify(warnings)).run();
+  await recordRun(added, warnings);
   return { added, warnings, total: pairs.length, nextOffset: offset + batch.length < pairs.length ? offset + batch.length : null };
 }
 
@@ -69,6 +76,6 @@ export async function scanOfficialSources(offset=0) {
   let added=0;
   for(const result of results)for(let start=0;start<result.events.length;start+=100)added+=await saveEvents(result.events.slice(start,start+100));
   const warnings=results.flatMap(result=>result.warnings);
-  await database().prepare("INSERT INTO scan_runs(id,new_events,warnings) VALUES(?,?,?)").bind(crypto.randomUUID(),added,JSON.stringify(warnings)).run();
+  await recordRun(added,warnings);
   return {added,results,warnings,total:selection.total,nextOffset:selection.nextOffset};
 }

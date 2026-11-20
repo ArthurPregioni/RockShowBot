@@ -2,13 +2,13 @@ import {readFileSync} from 'node:fs';
 import {parseEnv} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {randomBytes} from 'node:crypto';
-import {loginThrottle} from './login-throttle.mjs';
+import {randomBytes,timingSafeEqual} from 'node:crypto';
+import {loginThrottle,sourceBucket} from './login-throttle.mjs';
 import {PERSONAL_COOKIE,personalAccessConfig,personalCookie,personalOwner} from './personal-access.mjs';
 import {clientIdentity} from './proxy-identity.mjs';
 import {mailHTML,saveMailConfig} from './mail-config.mjs';
 import {accountStore,accountHTML} from './accounts.mjs';
-import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML,signupHTML,SESSION_SECONDS} from './session.mjs';
+import {passwordHash,verifyPassword,sessionStore,sessionCookie,cookies,safeReturn,loginHTML,signupHTML,userError,SESSION_SECONDS} from './session.mjs';
 
 if(process.env.ROCKSHOWBOT_ENV_FILE){const values=parseEnv(readFileSync(process.env.ROCKSHOWBOT_ENV_FILE,'utf8'));for(const [key,value]of Object.entries(values))process.env[key]=value;}
 const root=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
@@ -23,19 +23,33 @@ const {localDatabase,runForOwner}=await import('./runtime.mjs');
 const binding=localDatabase();binding.migrate(path.join(root,'drizzle'));
 const accounts=accountStore(binding.connection);accounts.initialize(username,process.env.ADMIN_EMAIL||`${username}@localhost`,encoded);
 const sessions=sessionStore(binding.connection),throttle=loginThrottle(binding.connection);
+// Verified for unknown users too, so the response time does not reveal which usernames exist.
+const decoy=await passwordHash(randomBytes(24).toString('base64url'));
 const personal=personalAccessConfig(origin);
-const registrationEnabled=process.env.ROCKSHOWBOT_REGISTRATION_ENABLED!=='false';
+const registrationEnabled=process.env.ROCKSHOWBOT_REGISTRATION_ENABLED==='true';
 const loginPage=(error='',returnTo='/')=>loginHTML(error,returnTo,registrationEnabled);
-let registrations={count:0,until:Date.now()+3600000};
+// Sign-up limits count accounts actually created in the hour: 20 for the installation and 3 per source.
+const signups=new Map();
+function reserveSignup(source){
+ const now=Date.now();
+ if(signups.size>4096)for(const [key,entry] of signups)if(entry.until<now||!entry.count)signups.delete(key);
+ const entries=['*',source].map(key=>{let entry=signups.get(key);if(!entry||entry.until<now){entry={count:0,until:now+3600000};signups.set(key,entry);}return entry;});
+ if(entries[0].count>=20||entries[1].count>=3)return null;
+ for(const entry of entries)entry.count++;
+ return ()=>{for(const entry of entries)entry.count--;};
+}
 function initializeRadar(created,email){
  const userdb=localDatabase(created.id);userdb.migrate(path.join(root,'drizzle'));
  userdb.connection.prepare('INSERT INTO bot_settings(id,email,notifications,countries,schedule) VALUES(1,?,0,?,?)').run(email,'["BR"]',process.env.ROCKSHOWBOT_SCHEDULER==='true'?'active':'pending');
 }
-const schedulerToken=randomBytes(32).toString('hex');
+const schedulerToken=randomBytes(32).toString('hex'),internalBearer=Buffer.from('Bearer '+schedulerToken);
+const BODY_LIMIT=1000000;
 const {startProdServer}=await import('vinext/server/prod-server');
 const {server,port}=await startProdServer({port:Number(process.env.PORT||8765),host:process.env.HOST||'127.0.0.1',outDir:path.resolve(process.env.ROCKSHOWBOT_BUILD_DIR||path.join(root,'dist'))});
 const handlers=server.listeners('request');server.removeAllListeners('request');
-const html=(res,status,body,extra={})=>{res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Content-Security-Policy':"frame-ancestors 'none'",...extra});res.end(body);};
+const html=(res,status,body,extra={})=>{res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Frame-Options':'DENY','Content-Security-Policy':"frame-ancestors 'none'",...extra});res.end(body);};
+// Only messages raised on purpose reach the page; any other failure is logged by name and answered generically.
+const shown=error=>{if(error?.expose)return error.message;console.error('Request failed:',error?.name);return 'Não foi possível concluir. Tente novamente.';};
 const redirect=(res,to,cookie)=>{res.writeHead(303,{'Location':to,'Cache-Control':'no-store',...(cookie?{'Set-Cookie':cookie}:{})});res.end();};
 const cookie=(token,clear=false)=>`${sessionCookie}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${clear?0:SESSION_SECONDS}${origin.protocol==='https:'?'; Secure':''}`;
 server.on('request',async(req,res)=>{
@@ -46,7 +60,8 @@ server.on('request',async(req,res)=>{
   const browserCookies=cookies(req.headers.cookie);
   const token=browserCookies[sessionCookie]||browserCookies[PERSONAL_COOKIE],owner=sessions.find(token);
   let account=owner?accounts.find(owner):null;
-  const internal=req.headers.authorization===`Bearer ${schedulerToken}`&&['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  const bearer=Buffer.from(String(req.headers.authorization||''));
+  const internal=bearer.length===internalBearer.length&&timingSafeEqual(bearer,internalBearer)&&['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
   const renew=account&&!internal&&sessions.touch(token);
   if(renew)res.setHeader('Set-Cookie',personal&&personalOwner(account)?[cookie(token),personalCookie(personal,token)]:cookie(token));
   if(internal)account=accounts.byId(req.headers['x-rockshowbot-owner']||'local-owner');
@@ -59,7 +74,7 @@ server.on('request',async(req,res)=>{
    if(!personal||req.method!=='GET'){html(res,404,'Página não encontrada.');return;}
    if(!account){redirect(res,'/login?return_to='+encodeURIComponent(safeReturn(req.url)));return;}
    if(!personalOwner(account)){html(res,403,'Os hubs pessoais são restritos à conta proprietária.');return;}
-   const target=personal.targets[url.searchParams.get('service')];
+   const service=url.searchParams.get('service')||'',target=Object.hasOwn(personal.targets,service)?personal.targets[service]:null;
    if(!target){html(res,400,'Central inválida.');return;}
    redirect(res,target,[cookie(token),personalCookie(personal,token)]);return;
   }
@@ -73,30 +88,35 @@ server.on('request',async(req,res)=>{
    if(account){redirect(res,'/');return;}
    if(req.method==='GET'){html(res,200,signupHTML());return;}
    if(req.method!=='POST'){html(res,405,'Método inválido.');return;}
-   if(registrations.until<Date.now())registrations={count:0,until:Date.now()+3600000};
-   if(registrations.count>=20){html(res,429,signupHTML('Limite de cadastros atingido nesta instalação. Tente novamente em uma hora.'));return;}
    let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,signupHTML('Formulário muito grande.'));return;}}
-   registrations.count++;
    const form=new URLSearchParams(body),password=form.get('password')||'';
+   let release=null;
    try{
-    if(password!==form.get('confirmation'))throw new Error('As senhas não coincidem.');
+    if(password!==form.get('confirmation'))throw userError('As senhas não coincidem.');
     const email=(form.get('email')||'').trim().toLowerCase();
+    // Reserved before the slow hash so a parallel burst cannot pass the limit; given back when no account is created.
+    release=reserveSignup(sourceBucket(clientIdentity(req,process.env.ROCKSHOWBOT_PROXY_KEY)));
+    if(!release){html(res,429,signupHTML('Limite de cadastros atingido nesta instalação. Tente novamente em uma hora.'));return;}
     const created=await accounts.create((form.get('username')||'').trim(),email,password);
+    release=null;
     initializeRadar(created,email);
     if(personal)sessions.revoke(browserCookies[PERSONAL_COOKIE]);
     redirect(res,'/',personal?[cookie(sessions.create(created.username,req.headers['user-agent'])),personalCookie(personal,'',true)]:cookie(sessions.create(created.username,req.headers['user-agent'])));return;
-   }catch(error){html(res,400,signupHTML(error.message));return;}
+   }catch(error){if(release)release();html(res,error?.expose?400:500,signupHTML(shown(error)));return;}
   }
   if(url.pathname==='/login'){
    if(req.method==='GET'){if(owner)redirect(res,safeReturn(url.searchParams.get('return_to')));else html(res,200,loginPage('',url.searchParams.get('return_to')));return;}
    if(req.method!=='POST'){html(res,405,'Método inválido.');return;}
-   const key=clientIdentity(req,process.env.ROCKSHOWBOT_PROXY_KEY),wait=throttle.remaining(key);
-   if(wait){html(res,429,loginPage('Muitas tentativas. Aguarde '+wait+' segundos.'),{'Retry-After':String(wait)});return;}
    let body='';for await(const chunk of req){body+=chunk;if(body.length>4096){html(res,413,'Formulário muito grande.');return;}}
-   const form=new URLSearchParams(body);
-   const candidate=accounts.find(form.get('username')||'');
-   if(!candidate||!await verifyPassword(form.get('password')||'',candidate.password_hash)){throttle.failed(key);html(res,401,loginPage('Usuário ou senha incorretos.',form.get('return_to')));return;}
-   throttle.success(key);
+   const form=new URLSearchParams(body),name=form.get('username')||'';
+   const source=clientIdentity(req,process.env.ROCKSHOWBOT_PROXY_KEY),wait=throttle.remaining(source,name);
+   if(wait){html(res,429,loginPage('Muitas tentativas. Aguarde '+wait+' segundos.',form.get('return_to')),{'Retry-After':String(wait)});return;}
+   // The attempt is counted before the slow password check, so a parallel burst cannot be evaluated ahead of the block.
+   throttle.failed(source,name);
+   const candidate=accounts.find(name);
+   const valid=await verifyPassword(form.get('password')||'',candidate?candidate.password_hash:decoy);
+   if(!candidate||!valid){html(res,401,loginPage('Usuário ou senha incorretos.',form.get('return_to')));return;}
+   throttle.success(source,name);
    if(personal)sessions.revoke(browserCookies[PERSONAL_COOKIE]);
    const signedIn=sessions.create(candidate.username,req.headers['user-agent']);
    redirect(res,safeReturn(form.get('return_to')),personal?[cookie(signedIn),personalCookie(personal,personalOwner(candidate)?signedIn:'',!personalOwner(candidate))]:cookie(signedIn));return;
@@ -119,16 +139,21 @@ server.on('request',async(req,res)=>{
       initializeRadar(created,form.get('email'));
       notice=`Conta criada. Compartilhe estas credenciais com a pessoa por um canal privado.\nUsuário: ${created.username}\nSenha inicial: ${created.password}\nA senha pode ser alterada na página Conta.`;
      }else if(url.pathname==='/account/password'){
-      if(!await verifyPassword(form.get('current')||'',account.password_hash))throw new Error('Senha atual incorreta.');
+      if(!await verifyPassword(form.get('current')||'',account.password_hash))throw userError('Senha atual incorreta.');
       await accounts.changePassword(account.id,form.get('password')||'');
       binding.connection.prepare('DELETE FROM node_sessions WHERE username=?').run(account.username);
       redirect(res,'/login',personal?[cookie('',true),personalCookie(personal,'',true)]:cookie('',true));return;
      }
-    }catch(error){html(res,400,url.pathname==='/admin/email'?mailHTML(error.message):accountHTML(accounts.list(),account.role==='admin',error.message));return;}
+    }catch(error){const message=shown(error);html(res,error?.expose?400:500,url.pathname==='/admin/email'?mailHTML(message):accountHTML(accounts.list(),account.role==='admin',message));return;}
    }
    if(url.pathname==='/admin/email'){html(res,200,mailHTML());return;}
    html(res,200,accountHTML(accounts.list(),account.role==='admin',notice,personal&&personalOwner(account)?personal.targets:null));return;
   }
+  // The app reads a body whole before checking its size, so the limit is enforced here. No route takes more than this.
+  if(Number(req.headers['content-length'])>BODY_LIMIT){res.writeHead(413,{'Content-Type':'application/json','Cache-Control':'no-store','Connection':'close'});res.end(JSON.stringify({error:'Requisição muito grande.'}));return;}
+  // Without a declared length, count what the parser delivers and drop the connection past the limit; the framework still reads the stream itself.
+  if(req.headers['content-length']===undefined){let size=0;const push=req.push;req.push=function(chunk,encoding){if(chunk&&(size+=chunk.length)>BODY_LIMIT){req.destroy();return false;}return push.call(this,chunk,encoding);};}
+  res.setHeader('X-Frame-Options','DENY');res.setHeader('Content-Security-Policy',"frame-ancestors 'none'");
   req.headers['oai-authenticated-user-id']=account.id;
   req.headers['oai-authenticated-user-email']=account.email;
   req.headers['oai-authenticated-user-full-name']=encodeURIComponent(account.username);
@@ -138,6 +163,7 @@ server.on('request',async(req,res)=>{
  }catch(error){console.error('Request failed:',error.name);if(!res.headersSent)html(res,500,'Não foi possível concluir. Tente novamente.');else res.destroy();}
 });
 console.log(`RockShowBot com login ativo em http://${process.env.HOST||'127.0.0.1'}:${port}`);
+if(origin.protocol==='https:'&&(process.env.ROCKSHOWBOT_PROXY_KEY||'').length<32)console.warn('Aviso: ROCKSHOWBOT_PROXY_KEY não configurada (mínimo de 32 caracteres). Todo visitante é visto como o endereço de loopback do túnel e divide os mesmos limites de login e cadastro. Veja o guia de endereço fixo.');
 if(process.env.ROCKSHOWBOT_SCHEDULER==='true'){
  const {startScheduler}=await import('./scheduler.mjs');startScheduler({port,token:schedulerToken,database:binding.connection,accounts,localDatabase});
 }

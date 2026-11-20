@@ -2,8 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {SQLiteBinding} from '../../deploy/node/database.mjs';
 import {passwordHash,verifyPassword,sessionStore,safeReturn} from '../../deploy/node/session.mjs';
+import {fileURLToPath} from 'node:url';
+const migrations=fileURLToPath(new URL('../../drizzle',import.meta.url));
 test('SQLite adapter applies real migrations and rolls back an entire failed batch',async()=>{
- const db=new SQLiteBinding(':memory:');db.migrate(new URL('../../drizzle',import.meta.url).pathname);db.migrate(new URL('../../drizzle',import.meta.url).pathname);
+ const db=new SQLiteBinding(':memory:');db.migrate(migrations);db.migrate(migrations);
  await db.prepare('INSERT INTO watch_artists(id,name,normalized) VALUES(?,?,?)').bind('one','Band','band').run();
  assert.equal((await db.prepare('SELECT * FROM watch_artists WHERE id=?').bind('one').first()).name,'Band');
  await assert.rejects(db.batch([db.prepare('DELETE FROM watch_artists'),db.prepare('INSERT INTO missing VALUES(1)')]));
@@ -15,7 +17,10 @@ test('Password verification, expiring sessions, logout and safe return paths',as
  const hash=await passwordHash('test-only-long-qa-password');assert.equal(await verifyPassword('test-only-long-qa-password',hash),true);assert.equal(await verifyPassword('wrong',hash),false);
  const db=new SQLiteBinding(':memory:'),sessions=sessionStore(db.connection),token=sessions.create('arthur');assert.equal(sessions.find(token),'arthur');assert.equal(sessions.find('forged'),undefined);sessions.revoke(token);assert.equal(sessions.find(token),undefined);
  const expired=sessions.create('arthur');db.connection.exec('UPDATE node_sessions SET expires=0');assert.equal(sessions.find(expired),undefined);
- assert.equal(safeReturn('https://evil.example'),'/');assert.equal(safeReturn('//evil.example'),'/');assert.equal(safeReturn('/music/browser-import?x=1'),'/music/browser-import?x=1');db.connection.close();
+ assert.equal(safeReturn('https://evil.example'),'/');assert.equal(safeReturn('//evil.example'),'/');assert.equal(safeReturn('/music/browser-import?x=1'),'/music/browser-import?x=1');
+ // Dot segments and backslashes must not normalise into a path that starts with two slashes.
+ for(const value of ['/.//evil.example','/x/..//evil.example/login','/.\\/evil.example','/./\\evil.example','https://local.invalid//evil.example'])assert.equal(safeReturn(value),'/');
+ assert.equal(safeReturn('/personal/access?service=casahub'),'/personal/access?service=casahub');db.connection.close();
 });
 test('Batch export preserves complete multiline values and confirmation history',async()=>{
  const db=new SQLiteBinding(':memory:');db.connection.exec('CREATE TABLE history(id TEXT PRIMARY KEY, body TEXT)');

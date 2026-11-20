@@ -1,6 +1,7 @@
 // Final receipt reconciliation while the destination's mail delivery is paused.
 import {readFileSync} from 'node:fs';
 import {SQLiteBinding} from './database.mjs';
+import {fileURLToPath} from 'node:url';
 const [source,target]=process.argv.slice(2);
 if(!source||!target)throw new Error('Usage: node merge-cloud.mjs frozen-export.json database.db');
 const data=JSON.parse(readFileSync(source,'utf8'));
@@ -9,7 +10,7 @@ const tables=['watch_artists','show_events','alert_receipts','alert_deliveries',
 if(tables.some(table=>!Array.isArray(data.tables?.[table])))throw new Error('Incomplete frozen export.');
 if(['alert_deliveries','preference_confirmations'].some(table=>data.tables[table].some(row=>['claimed','unknown'].includes(row.status))))throw new Error('Reconcile uncertain sends before merging.');
 const binding=new SQLiteBinding(target),db=binding.connection;
-binding.migrate(new URL('../../drizzle',import.meta.url).pathname);
+binding.migrate(fileURLToPath(new URL('../../drizzle',import.meta.url)));
 function insert(table,row){
  const columns=new Set(db.prepare(`PRAGMA table_info(${table})`).all().map(c=>c.name));
  const keys=Object.keys(row);if(keys.some(k=>!columns.has(k)))throw new Error('Unexpected columns in '+table);

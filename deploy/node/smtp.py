@@ -1,13 +1,22 @@
 """SMTP transport and authentication-only check; private configuration from env."""
-import json,os,smtplib,ssl,sys
+import json,os,re,smtplib,ssl,sys
 from email.message import EmailMessage
-from email.utils import make_msgid,formatdate,parseaddr
+from email.utils import make_msgid,formatdate,parseaddr,getaddresses
+
+
+def single_recipient(value):
+    """Separators or quoting in 'to' would address several mailboxes; accept exactly one."""
+    if not isinstance(value,str) or re.search(r'[\r\n]',value):return False
+    found=[address for _,address in getaddresses([value])]
+    return len(found)==1 and re.fullmatch(r'[^\s@]+@[^\s@]+',found[0]) is not None
 
 
 def deliver(message,config=None,factory=None):
     config=os.environ if config is None else config
     client=None;stage='connect'
     try:
+        if not message.get('validate') and not single_recipient(message.get('to')):
+            return {'accepted':False,'uncertain':False,'error':'recipient-invalid'}
         host=config['SMTP_HOST'];port=int(config.get('SMTP_PORT','587'))
         if factory:
             client=factory(host,port)
@@ -34,8 +43,8 @@ def deliver(message,config=None,factory=None):
         mail.set_content(message['body'])
         if message.get('html'):mail.add_alternative(message['html'],subtype='html')
         stage='data'
-        rejected=client.send_message(mail)
-        if rejected:return {'accepted':False,'uncertain':False,'error':'recipient-rejected'}
+        # Refusal of every recipient raises. A partial refusal still delivered the message, so it counts as sent.
+        client.send_message(mail)
         return {'accepted':True,'messageId':mail['Message-ID']}
     except smtplib.SMTPAuthenticationError:
         return {'authenticated':False,'accepted':False,'uncertain':False,'error':'authentication'}

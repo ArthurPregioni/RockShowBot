@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     env_file: ../../.env
     environment:
+      # Overrides HOST=127.0.0.1 from .env: the port below is published on the host's loopback only.
+      HOST: "0.0.0.0"
       PORT: "10000"
       DATABASE_PATH: /var/data/rockshowbot.db
     ports:

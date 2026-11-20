@@ -68,6 +68,8 @@ function safeRelativeReturnPath(value: string): string {
     return "/";
   }
   if (url.origin !== "https://app.local") return "/";
+  // "/.//host" normalises to the path "//host", which a browser follows to another site.
+  if (url.pathname.startsWith("//") || url.pathname.includes("\\")) return "/";
   if (isReservedAuthPath(url.pathname)) return "/";
 
   return `${url.pathname}${url.search}${url.hash}`;

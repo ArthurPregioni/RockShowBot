@@ -51,6 +51,13 @@ class BridgeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             bridge.publish_origin({}, 'https://evil.example', Client())
 
+    def test_cloudflared_api_host_is_never_taken_for_the_tunnel(self):
+        self.assertEqual(bridge.tunnel_url('INF |  https://some-random-words.trycloudflare.com  |'), 'https://some-random-words.trycloudflare.com')
+        self.assertIsNone(bridge.tunnel_url('failed to request quick Tunnel: Post "https://api.trycloudflare.com/tunnel": dial tcp: no such host'))
+        self.assertIsNone(bridge.tunnel_url('Requesting new quick Tunnel on trycloudflare.com...'))
+        with self.assertRaises(ValueError):
+            bridge.publish_origin({'publicOrigin': 'https://rockshowbot.example.workers.dev', 'updateToken': 'test-only'}, 'https://api.trycloudflare.com')
+
 
 if __name__ == '__main__':
     unittest.main()

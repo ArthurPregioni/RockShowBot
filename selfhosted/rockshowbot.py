@@ -15,11 +15,13 @@ import re
 import signal
 import smtplib
 import sqlite3
+import ssl
 import threading
+import time
 import unicodedata
 import urllib.parse
 import urllib.request
-from datetime import date
+from datetime import date, datetime
 from contextlib import contextmanager
 from email.message import EmailMessage
 from email.parser import BytesParser
@@ -28,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from pathlib import Path
 
+from . import safe_urlopen
 from . import spotify_integration as spotify
 from . import apple_music_integration as apple_music
 
@@ -37,8 +40,10 @@ PHQ_KEY = os.getenv("PREDICTHQ_API_KEY", "")
 APP_USER = os.getenv("APP_USER", "admin")
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 SCAN_LOCK = threading.Lock()
+NOTIFY_LOCK = threading.Lock()
 STOP_SCHEDULER = threading.Event()
 MAX_POST_BYTES = 1_000_000
+FIRST_SCAN_SECONDS = 60
 
 
 @contextmanager
@@ -117,9 +122,13 @@ def send_email(subject, body):
     message["To"] = recipient
     message.set_content(body)
     port = int(os.getenv("SMTP_PORT", "587"))
-    with smtplib.SMTP(host, port, timeout=20) as smtp:
-        if os.getenv("SMTP_STARTTLS", "true").lower() in ("1", "true", "yes"):
-            smtp.starttls()
+    # smtplib does not verify certificates unless it is given a context. Port 465 is implicit TLS.
+    context = ssl.create_default_context()
+    implicit = port == 465
+    client = smtplib.SMTP_SSL(host, port, timeout=20, context=context) if implicit else smtplib.SMTP(host, port, timeout=20)
+    with client as smtp:
+        if not implicit and os.getenv("SMTP_STARTTLS", "true").lower() in ("1", "true", "yes"):
+            smtp.starttls(context=context)
         username, password = os.getenv("SMTP_USERNAME"), os.getenv("SMTP_PASSWORD")
         if username:
             smtp.login(username, password or "")
@@ -129,32 +138,62 @@ def send_email(subject, body):
 
 def notify_pending():
     """Send unsent event alerts; leave them queued when SMTP is unavailable."""
-    with db() as con:
-        pending = con.execute("SELECT * FROM events WHERE email_sent=0 ORDER BY discovered_at,id").fetchall()
-    if not pending:
-        return 0
-    lines = []
-    for event in pending:
-        label = "DICA NÃO VERIFICADA" if event["status"] == "unverified" else "LISTADO NA FONTE"
-        lines.append(f"[{label}] {event['artist']} — {event['title']}\n"
-                     f"{event['starts_at']} | {event['venue']} — {event['city']} ({event['region']})\n"
-                     f"Fonte: {event['source']}\n{event['url']}")
-    try:
-        sent = send_email(f"RockShowBot: {len(pending)} alerta(s) novo(s)", "Novos eventos/dicas:\n\n" + "\n\n".join(lines))
-    except Exception as exc:
-        print(f"Email failed; alerts remain queued: {exc}")
-        return 0
-    if sent:
+    # A scan and a tip request run in different threads and must not both mail the same rows.
+    with NOTIFY_LOCK:
         with db() as con:
-            con.executemany("UPDATE events SET email_sent=1 WHERE id=?", [(event["id"],) for event in pending])
-        return len(pending)
-    return 0
+            pending = con.execute("SELECT * FROM events WHERE email_sent=0 ORDER BY discovered_at,id").fetchall()
+        if not pending:
+            return 0
+        lines = []
+        for event in pending:
+            label = "DICA NÃO VERIFICADA" if event["status"] == "unverified" else "LISTADO NA FONTE"
+            lines.append(f"[{label}] {event['artist']} — {event['title']}\n"
+                         f"{event['starts_at']} | {event['venue']} — {event['city']} ({event['region']})\n"
+                         f"Fonte: {event['source']}\n{event['url']}")
+        try:
+            sent = send_email(f"RockShowBot: {len(pending)} alerta(s) novo(s)", "Novos eventos/dicas:\n\n" + "\n\n".join(lines))
+        except Exception as exc:
+            print(f"Email failed; alerts remain queued: {exc}")
+            return 0
+        if sent:
+            with db() as con:
+                con.executemany("UPDATE events SET email_sent=1 WHERE id=?", [(event["id"],) for event in pending])
+            return len(pending)
+        return 0
 
 
 def normalized(value):
     value = unicodedata.normalize("NFKD", value or "")
     value = "".join(char for char in value if not unicodedata.combining(char)).casefold()
     return " ".join(re.findall(r"[a-z0-9]+", value))
+
+
+BILLED_BEFORE = re.compile(r"(?:^|[|:;,(\[/+&•·]|\s[-–—]|(?:^|\s)(?:e|y|and|with|com|feat\.?|ft\.?|x|vs\.?))"
+                           r"\s*[\"'“‘]*\s*(?:(?:the|os|as|los|las)\s+)?$")
+BILLED_AFTER = re.compile(r"[\"'”’]*(?:[!?.…]*\s*$|\s*[|:;,()\[\]/+&@•·]|\s+[-–—](?:\s|$)|\s+(?:e|y|and|with|com|feat|ft|x|em|no|na|in|at|en"
+                          r"|ao vivo|en vivo|live|in concert|em concerto|tour|turne|gira|shows?|20\d\d)\b)")
+TRIBUTE = re.compile(r"\b(?:tribut\w*|covers?|homenage\w*)\b")
+
+
+def names_artist(title, artist):
+    """True when a title bills the artist itself: "Artist", "Artist - Tour", "Other + Artist", "Artist ao vivo".
+
+    The name followed by other words ("Queen Experience", "Angra dos Reis Festival"), inside a
+    longer name ("Big Time Rush") or beside a tribute marker is a different event.
+    """
+    tokens = normalized(artist).split()
+    if not tokens:
+        return False
+    text = unicodedata.normalize("NFKD", title or "")
+    text = "".join(char for char in text if not unicodedata.combining(char)).casefold()
+    name = re.compile(r"(?<![a-z0-9])" + r"[^a-z0-9]+".join(tokens) + r"(?![a-z0-9])")
+    for match in name.finditer(text):
+        before, after = text[:match.start()], text[match.end():]
+        if TRIBUTE.search(before + " " + after):
+            return False
+        if BILLED_BEFORE.search(before) and BILLED_AFTER.match(after):
+            return True
+    return False
 
 
 def ticketmaster_matches(artist, event):
@@ -164,9 +203,27 @@ def ticketmaster_matches(artist, event):
     names = [normalized(item.get("name", "")) for item in attractions]
     if names:
         return wanted in names
-    # Some event records omit attractions; accept only a full title match.
-    title = normalized(event.get("name", ""))
-    return title == wanted or title.startswith(wanted + " ") or title.endswith(" " + wanted)
+    # Some event records omit attractions; then the title itself has to bill the artist.
+    return names_artist(event.get("name", ""), artist)
+
+
+def local_start(day, clock="", fallback=""):
+    """The venue's calendar day and time. Provider UTC instants land on the next day for evening shows."""
+    return (day + ("T" + clock if clock else "")) if day else fallback
+
+
+def predicthq_start(event):
+    start = event.get("start", "")
+    if event.get("start_local"):
+        return event["start_local"]
+    try:
+        from zoneinfo import ZoneInfo
+        moment = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        if moment.tzinfo is None:
+            return start
+        return moment.astimezone(ZoneInfo(event["timezone"])).strftime("%Y-%m-%dT%H:%M:%S")
+    except Exception:  # no timezone in the record, or no time zone database on this system
+        return start
 
 
 class TicketmasterSource:
@@ -182,7 +239,7 @@ class TicketmasterSource:
             request = urllib.request.Request("https://app.ticketmaster.com/discovery/v2/events.json?" + query,
                 headers={"User-Agent": "RockShowBot/0.2 (open source concert alerts)"})
             try:
-                with urllib.request.urlopen(request, timeout=25) as response:
+                with safe_urlopen(request, timeout=25) as response:
                     payload = json.load(response)
             except Exception as exc:
                 print(f"Ticketmaster lookup failed for {artist}/{country}: {exc}")
@@ -191,12 +248,14 @@ class TicketmasterSource:
             for event in events:
                 if not ticketmaster_matches(artist, event):
                     continue
+                if (event.get("dates", {}).get("status", {}).get("code") or "").lower() in ("cancelled", "canceled", "postponed"):
+                    continue
                 dates = event.get("dates", {}).get("start", {})
                 venue = (event.get("_embedded", {}).get("venues") or [{}])[0]
                 found.append({"id": "tm:" + event["id"], "artist": artist,
                     "title": event.get("name", artist), "venue": venue.get("name", ""),
                     "city": venue.get("city", {}).get("name", ""), "region": country,
-                    "starts_at": dates.get("dateTime") or dates.get("localDate", ""),
+                    "starts_at": local_start(dates.get("localDate"), dates.get("localTime"), dates.get("dateTime", "")),
                     "url": event.get("url", ""), "source": self.name, "status": "listed"})
         return found
 
@@ -216,7 +275,7 @@ class PredictHQSource:
                 headers={"Authorization": "Bearer " + PHQ_KEY, "Accept": "application/json",
                          "User-Agent": "RockShowBot/0.2"})
             try:
-                with urllib.request.urlopen(request, timeout=25) as response:
+                with safe_urlopen(request, timeout=25) as response:
                     payload = json.load(response)
             except Exception as exc:
                 print(f"PredictHQ lookup failed for {artist}/{country}: {exc}")
@@ -224,13 +283,14 @@ class PredictHQSource:
             for event in payload.get("results", []):
                 entity_names = [normalized(item.get("name", "")) for item in event.get("entities", [])]
                 title = event.get("title", "")
-                normalized_title = normalized(title)
-                if normalized(artist) not in entity_names and normalized(artist) not in normalized_title:
+                if normalized(artist) not in entity_names and not names_artist(title, artist):
+                    continue
+                if event.get("state") not in (None, "", "active"):  # deleted (cancelled/postponed) or only predicted
                     continue
                 city = event.get("place", {}).get("name", "")
                 found.append({"id": "phq:" + str(event["id"]), "artist": artist,
                     "title": title or artist, "venue": "", "city": city, "region": country,
-                    "starts_at": event.get("start", ""),
+                    "starts_at": predicthq_start(event),
                     "url": "https://predicthq.com/events/" + urllib.parse.quote(str(event["id"])),
                     "source": self.name, "status": "listed"})
         return found
@@ -248,6 +308,7 @@ def configured_sources():
 def scan(sources=None):
     """Scan all configured providers. Failures in one provider do not stop others."""
     with SCAN_LOCK:
+        set_setting("last_scan", str(time.time()))
         prune_expired_events()
         with db() as con:
             artists = [row[0] for row in con.execute("SELECT name FROM artists ORDER BY name")]
@@ -335,6 +396,7 @@ def source_status():
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "RockShowBot/0.2"
+    timeout = 30  # an idle or stalled connection must not hold a thread forever
 
     def respond(self, status, body, content_type="text/html; charset=utf-8", headers=()):
         data = body.encode("utf-8") if isinstance(body, str) else body
@@ -362,8 +424,10 @@ class Handler(BaseHTTPRequestHandler):
             username, password = base64.b64decode(token, validate=True).decode().split(":", 1)
         except Exception:
             username, password, kind = "", "", ""
-        valid = (kind.lower() == "basic" and username == APP_USER and
-                 bool(APP_PASSWORD) and hmac.compare_digest(password, APP_PASSWORD))
+        # compare_digest rejects non-ASCII str, so compare the UTF-8 bytes.
+        valid = (kind.lower() == "basic" and bool(APP_PASSWORD) and
+                 hmac.compare_digest(username.encode(), APP_USER.encode()) and
+                 hmac.compare_digest(password.encode(), APP_PASSWORD.encode()))
         if not valid:
             self.respond(401, "Autenticação necessária.", headers=(("WWW-Authenticate", 'Basic realm="RockShowBot", charset="UTF-8"'),))
         return valid
@@ -659,8 +723,23 @@ class Handler(BaseHTTPRequestHandler):
             urllib.parse.urlsplit(self.path).path, self.request_version, code, size)
 
 
+def next_scan_delay(interval_hours):
+    """Seconds until the next scheduled scan: soon after start-up when one is due.
+
+    The time of the last scan is stored, so a host that restarts often neither skips its scans
+    nor repeats them on every start.
+    """
+    interval = interval_hours * 3600
+    try:
+        elapsed = time.time() - float(setting("last_scan", "0"))
+    except (ValueError, sqlite3.Error):
+        return interval
+    soon = min(FIRST_SCAN_SECONDS, interval)
+    return max(soon, interval - elapsed) if elapsed >= 0 else soon
+
+
 def scheduled_scans(interval_hours):
-    while not STOP_SCHEDULER.wait(interval_hours * 3600):
+    while not STOP_SCHEDULER.wait(next_scan_delay(interval_hours)):
         try:
             count = scan()
             print(f"Scheduled scan finished: {count} new event(s)")
@@ -680,7 +759,8 @@ def run_server():
         raise SystemExit("SCAN_INTERVAL_HOURS precisa ser um número positivo") from exc
     if not math.isfinite(interval_hours) or interval_hours <= 0:
         raise SystemExit("SCAN_INTERVAL_HOURS precisa ser maior que zero")
-    host = os.getenv("HOST", "0.0.0.0")
+    # Loopback unless the host is chosen explicitly; the Docker image sets 0.0.0.0 for its port mapping.
+    host = os.getenv("HOST", "127.0.0.1")
     server = ThreadingHTTPServer((host, port), Handler)
     previous_sigterm = None
 

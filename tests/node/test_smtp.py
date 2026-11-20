@@ -38,4 +38,14 @@ class SMTPTests(unittest.TestCase):
         self.assertTrue(ambiguous['uncertain']);self.assertFalse(ambiguous['accepted'])
         rejected=transport.deliver(message,CONFIG,lambda *_:FakeSMTP(send_error=smtplib.SMTPDataError(550,b'rejected')))
         self.assertFalse(rejected['uncertain']);self.assertFalse(rejected['accepted'])
+    def test_anything_but_one_recipient_is_refused_before_connecting(self):
+        for to in ['x,victim@example.test','a;b@example.test','first@example.test, second@example.test','recipient@example.test\r\nBcc: victim@example.test','',None]:
+            connections=[];result=transport.deliver({'to':to,'subject':'QA','body':'Synthetic QA'},CONFIG,lambda *_:connections.append(1))
+            self.assertEqual(result,{'accepted':False,'uncertain':False,'error':'recipient-invalid'});self.assertEqual(connections,[])
+    def test_partial_refusal_delivered_the_message_and_counts_as_sent(self):
+        class Partial(FakeSMTP):
+            def send_message(self,message):
+                super().send_message(message);return {'other@example.test':(550,b'refused')}
+        result=transport.deliver({'to':'recipient@example.test','subject':'QA','body':'Synthetic QA'},CONFIG,lambda *_:Partial())
+        self.assertTrue(result['accepted']);self.assertIn('@example.test',result['messageId'])
 if __name__=='__main__':unittest.main()

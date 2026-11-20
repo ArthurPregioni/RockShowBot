@@ -5,7 +5,8 @@ const json=(data,status=200)=>Response.json(data,{status,headers});
 export function tunnelOrigin(value){
  if(typeof value!=='string')throw new Error('Invalid tunnel');
  const url=new URL(value);
- if(url.protocol!=='https:'||url.username||url.password||url.port||url.pathname!=='/'||url.search||url.hash||!/^[-a-z0-9]+\.trycloudflare\.com$/.test(url.hostname))throw new Error('Invalid tunnel');
+ // api.trycloudflare.com is the service that issues tunnels, never a tunnel.
+ if(url.protocol!=='https:'||url.username||url.password||url.port||url.pathname!=='/'||url.search||url.hash||!/^[-a-z0-9]+\.trycloudflare\.com$/.test(url.hostname)||url.hostname==='api.trycloudflare.com')throw new Error('Invalid tunnel');
  return url.origin;
 }
 async function authorized(request,secret){
@@ -28,6 +29,11 @@ export async function handleBridge(request,env,fetcher=fetch){
   let origin;try{origin=tunnelOrigin(JSON.parse(body).origin);}catch{return json({error:'Invalid tunnel origin'},400);}
   await env.TUNNEL_STATE.put('origin',origin);
   return json({updated:true});
+ }
+ // Optional edge limit per visitor address, applied before an attempt reaches the phone.
+ if(env.LOGIN_RATE_LIMITER&&request.method==='POST'&&['/login','/register'].includes(publicURL.pathname)){
+  const limit=await env.LOGIN_RATE_LIMITER.limit({key:'rockshowbot:'+(request.headers.get('CF-Connecting-IP')||'unknown')});
+  if(!limit.success)return new Response('Muitas tentativas. Aguarde um minuto e tente novamente.',{status:429,headers:{...headers,'Content-Type':'text/plain; charset=utf-8','Retry-After':'60'}});
  }
  let origin;try{origin=tunnelOrigin(await env.TUNNEL_STATE.get('origin'));}catch{
   return new Response('O endereço do celular está sendo atualizado. Tente novamente em instantes.',{status:503,headers:{...headers,'Content-Type':'text/plain; charset=utf-8','Retry-After':'30'}});

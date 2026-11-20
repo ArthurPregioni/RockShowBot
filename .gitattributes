@@ -1,0 +1,2 @@
+# Shell scripts run on the phone: CRLF from a Windows checkout or archive breaks them.
+*.sh text eol=lf

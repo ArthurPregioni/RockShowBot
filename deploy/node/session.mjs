@@ -11,7 +11,10 @@ export async function verifyPassword(password,encoded){
   const expected=Buffer.from(digest,'hex'),actual=await scrypt(password,salt,64);
   return expected.length===actual.length&&timingSafeEqual(expected,actual);
 }
-export function safeReturn(value){try{const u=new URL(value||'/','https://local.invalid');return u.origin==='https://local.invalid'&&!['/login','/register','/signin-with-chatgpt','/signout-with-chatgpt'].includes(u.pathname)?u.pathname+u.search:'/';}catch{return '/';}}
+// Messages raised on purpose for the person using the page; anything else is answered generically.
+export const userError=message=>Object.assign(new Error(message),{expose:true});
+// "/.//host" normalises to the path "//host", which a browser follows to another site.
+export function safeReturn(value){try{const u=new URL(value||'/','https://local.invalid');return u.origin==='https://local.invalid'&&!u.pathname.startsWith('//')&&!u.pathname.includes('\\')&&!['/login','/register','/signin-with-chatgpt','/signout-with-chatgpt'].includes(u.pathname)?u.pathname+u.search:'/';}catch{return '/';}}
 export function cookies(value=''){return Object.fromEntries(value.split(';').map(part=>{const i=part.indexOf('=');return i<0?['','']:[part.slice(0,i).trim(),part.slice(i+1).trim()];}));}
 export const SESSION_SECONDS=180*86400;
 export function sessionStore(db){

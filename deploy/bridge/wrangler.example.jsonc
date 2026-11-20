@@ -3,8 +3,14 @@
   "main": "../../deploy/bridge/worker.mjs",
   "compatibility_date": "2026-11-04",
   "workers_dev": true,
+  // Optional edge limit for POST /login and /register, per visitor address. Uncomment and use any
+  // integer that no other rate limit of your account uses as namespace_id.
+  // "ratelimits": [{ "name": "LOGIN_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
   "kv_namespaces": [
     { "binding": "TUNNEL_STATE", "id": "REPLACE_WITH_YOUR_NAMESPACE_ID" }
   ]
-  // Add ORIGIN_UPDATE_TOKEN with `wrangler secret put`, never in this file.
+  // Secrets go in with `wrangler secret put`, never in this file:
+  //   ORIGIN_UPDATE_TOKEN  lets the phone publish its tunnel address; guard it like a password.
+  //   ORIGIN_PROXY_KEY     same value as ROCKSHOWBOT_PROXY_KEY in node.env, so the phone trusts the
+  //                        visitor address this Worker sends and limits logins per visitor.
 }

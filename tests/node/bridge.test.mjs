@@ -9,7 +9,7 @@ test('Bridge updates require authentication and accept only plain HTTPS tunnel o
  const env=environment();
  const https=await handleBridge(new Request('http://rockshowbot.example.workers.dev/login'),env);assert.equal(https.status,308);assert.equal(https.headers.get('Location'),base+'/login');
  assert.equal((await handleBridge(update(origin,'wrong'),env)).status,401);assert.equal(env.values.size,0);
- for(const value of ['http://phone.trycloudflare.com','https://example.com','https://user:pass@phone.trycloudflare.com','https://phone.trycloudflare.com/path','https://phone.trycloudflare.com/?token=x','https://127.0.0.1','https://phone.trycloudflare.com.evil.example']){
+ for(const value of ['http://phone.trycloudflare.com','https://example.com','https://user:pass@phone.trycloudflare.com','https://phone.trycloudflare.com/path','https://phone.trycloudflare.com/?token=x','https://127.0.0.1','https://phone.trycloudflare.com.evil.example','https://api.trycloudflare.com']){
   assert.throws(()=>tunnelOrigin(value));assert.equal((await handleBridge(update(value),env)).status,400);
  }
  const result=await handleBridge(update(origin),env);assert.deepEqual(await result.json(),{updated:true});assert.equal(env.values.get('origin'),origin);
@@ -42,4 +42,15 @@ test('Bridge authenticates gateway metadata and removes client supplied identity
  Object.defineProperty(request,'cf',{value:{country:'BR',city:'Rio de Janeiro',asn:12345,asOrganization:'Test ISP'}});
  const response=await handleBridge(request,env,async req=>{assert.equal(req.headers.get('X-Hub-Service'),'rockshowbot');assert.equal(req.headers.get('X-Hub-Proxy-Key'),env.ORIGIN_PROXY_KEY);assert.equal(req.headers.get('X-Hub-Client-IP'),'203.0.113.8');assert.equal(req.headers.get('X-Hub-Country'),'BR');assert.equal(req.headers.get('X-Hub-ASN'),'12345');return new Response('ok')});
  assert.equal(response.status,200);
+});
+test('Optional edge limit answers 429 to login and sign-up posts before they reach the phone',async()=>{
+ const env=environment();env.values.set('origin',origin);const keys=[];let calls=0;
+ env.LOGIN_RATE_LIMITER={limit:async({key})=>{keys.push(key);return {success:keys.length<=2};}};
+ const post=path=>handleBridge(new Request(base+path,{method:'POST',headers:{'CF-Connecting-IP':'203.0.113.8',Origin:base},body:'x=1'}),env,async()=>{calls++;return new Response('ok');});
+ assert.equal((await post('/login')).status,200);assert.equal((await post('/register')).status,200);
+ const limited=await post('/login');assert.equal(limited.status,429);assert.equal(limited.headers.get('Retry-After'),'60');assert.equal(calls,2);
+ assert.deepEqual([...new Set(keys)],['rockshowbot:203.0.113.8']);
+ // Other requests are never counted, and an installation without the binding keeps working.
+ assert.equal((await post('/api/artists')).status,200);assert.equal((await handleBridge(new Request(base+'/login'),env,async()=>new Response('page'))).status,200);assert.equal(keys.length,3);
+ delete env.LOGIN_RATE_LIMITER;assert.equal((await post('/login')).status,200);
 });

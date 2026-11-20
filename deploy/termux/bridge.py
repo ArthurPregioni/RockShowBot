@@ -28,11 +28,18 @@ def bridge_settings(directory):
     return {'publicOrigin': origin.rstrip('/'), 'updateToken': value['updateToken']}
 
 
+def tunnel_url(line):
+    """The tunnel address in a cloudflared log line. Its API host shows up in error lines and is never a tunnel."""
+    match = re.search(r'https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com', line)
+    return match.group() if match else None
+
+
 def publish_origin(settings, tunnel, opener=None):
     url = urlsplit(tunnel)
     if (url.scheme != 'https' or url.username or url.password or url.port
             or url.path not in ('', '/') or url.query or url.fragment
-            or not re.fullmatch(r'[a-z0-9-]+\.trycloudflare\.com', url.hostname or '')):
+            or not re.fullmatch(r'[a-z0-9-]+\.trycloudflare\.com', url.hostname or '')
+            or url.hostname == 'api.trycloudflare.com'):
         raise ValueError('Invalid tunnel origin')
     request = urllib.request.Request(
         settings['publicOrigin'] + '/_rockshowbot/tunnel',
