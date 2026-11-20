@@ -185,7 +185,7 @@ def names_artist(title, artist):
     if not tokens:
         return False
     text = unicodedata.normalize("NFKD", title or "")
-    text = "".join(char for char in text if not unicodedata.combining(char)).casefold()
+    text = " ".join("".join(char for char in text if not unicodedata.combining(char)).casefold().split())
     name = re.compile(r"(?<![a-z0-9])" + r"[^a-z0-9]+".join(tokens) + r"(?![a-z0-9])")
     for match in name.finditer(text):
         before, after = text[:match.start()], text[match.end():]
@@ -213,7 +213,8 @@ def local_start(day, clock="", fallback=""):
 
 
 def predicthq_start(event):
-    start = event.get("start", "")
+    """PredictHQ's start is a UTC instant: prefer its local field, else convert with the event's time zone."""
+    start = event.get("start") or ""
     if event.get("start_local"):
         return event["start_local"]
     try:

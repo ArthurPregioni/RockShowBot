@@ -15,9 +15,11 @@ function harness({accounts=owner,answer=()=>undefined,transport=async()=>({messa
   const call={owner:options.headers['x-rockshowbot-owner'],action:new URL(url).pathname.replace('/api/automation/',''),body:options.body?JSON.parse(options.body):undefined};calls.push(call);
   try{return Response.json(await answer(call)??idle[call.action]??{ok:true});}catch(error){return Response.json({error:error.message},{status:500});}
  };
- const scheduler=startScheduler({port:1,token:'test-only',database:binding.connection,accounts:{list:()=>accounts},localDatabase:()=>({migrate(){}}),fetcher,transport,clock:()=>state.time});
+ const start=()=>startScheduler({port:1,token:'test-only',database:binding.connection,accounts:{list:()=>accounts},localDatabase:()=>({migrate(){}}),fetcher,transport,clock:()=>state.time});
+ let scheduler=start();
  const jobs=()=>binding.connection.prepare('SELECT slot,status,attempts FROM node_jobs ORDER BY slot').all().map(row=>({...row}));
- return {scheduler,calls,state,jobs,db:binding.connection,trace:()=>calls.map(call=>call.owner+' '+call.action),close(){scheduler.stop();binding.connection.close();}};
+ // restart() stands for the service being stopped and started: only what is in the database survives.
+ return {get scheduler(){return scheduler;},restart(){scheduler.stop();scheduler=start();},calls,state,jobs,db:binding.connection,trace:()=>calls.map(call=>call.owner+' '+call.action),close(){scheduler.stop();binding.connection.close();}};
 }
 test('The open scan slot is the 09h or 21h of Brasília that started last',()=>{
  for(const [utc,slot] of [['2026-11-19T11:59:00Z','2026-11-18-21'],['2026-11-19T12:00:00Z','2026-11-19-09'],['2026-11-19T23:59:00Z','2026-11-19-09'],['2026-11-20T00:00:00Z','2026-11-19-21'],['2026-11-20T03:10:00Z','2026-11-19-21']])assert.equal(scanSlot(Date.parse(utc)),slot);
@@ -51,19 +53,56 @@ test('A failed or abandoned scan is retried on later ticks, three attempts at mo
 test('A send left unconfirmed returns to the queue after 30 minutes instead of blocking alerts forever',async()=>{
  const status={alert:'unknown',confirmation:'claimed'},sent=[],released=[];
  const h=harness({transport:async message=>{sent.push(message.id);return {messageId:'<sent@example.test>'};},answer:({action,body})=>{
-  if(action==='confirmations')return {confirmations:status.confirmation==='sent'?[]:[{id:'c1',status:status.confirmation}]};
+  if(action==='confirmations')return {confirmations:status.confirmation==='sent'?[]:[{id:'c1',status:status.confirmation,created_at:'2026-11-19T14:00:00.000Z'}]};
   if(action==='alerts/prepare')return status.alert==='sent'?{delivery:null}:{delivery:{id:'d1'},needsReconciliation:status.alert!=='pending'};
   const kind=action.startsWith('alerts')?'alert':'confirmation';
   if(action.endsWith('/error')){released.push(action+' '+body.status);status[kind]=body.status;}
   if(action.endsWith('/claim')){assert.equal(status[kind],'pending');status[kind]='claimed';return {id:body.id,to:'owner@example.test',subject:'QA',body:'Synthetic QA'};}
   if(action.endsWith('/ack'))status[kind]='sent';
  }});
- const start=h.state.time;
+ const start=h.state.time,before=logs.length;
  for(const elapsed of [0,10,29]){h.state.time=start+elapsed*minute;await h.scheduler.tick();}
  assert.deepEqual(sent,[]);assert.deepEqual(released,[]);
  h.state.time=start+30*minute;await h.scheduler.tick();
  assert.deepEqual(sent,['c1','d1']);assert.deepEqual(released,['confirmations/error pending','alerts/error pending']);assert.deepEqual(status,{alert:'sent',confirmation:'sent'});
- assert.equal(logs.filter(line=>line.includes('devolvido à fila')).length,2);h.close();
+ assert.equal(logs.slice(before).filter(line=>line.includes('devolvido à fila')).length,2);
+ // A confirmed send leaves nothing behind to count against a later message.
+ assert.equal(h.db.prepare('SELECT COUNT(*) AS total FROM node_resends').get().total,0);h.close();
+});
+test('Automatic returns to the queue stop at three, with growing waits, and a restart does not start the series again',async()=>{
+ let status='pending';const sent=[];
+ const h=harness({transport:async()=>{sent.push((h.state.time-start)/minute);throw Object.assign(new Error('no reply after the data'),{uncertain:true});},answer:({action,body})=>{
+  if(action==='alerts/prepare')return {delivery:{id:'d1'},needsReconciliation:status!=='pending'};
+  if(action==='alerts/error')status=body.status;
+  if(action==='alerts/claim'){assert.equal(status,'pending');status='claimed';return {id:body.id,to:'owner@example.test',subject:'QA',body:'Synthetic QA'};}
+ }});
+ const start=h.state.time,before=logs.length,at=async elapsed=>{h.state.time=start+elapsed*minute;await h.scheduler.tick();};
+ // Sent at 0 and left unconfirmed: it returns 30 minutes later, then 2 hours and 8 hours after the previous return.
+ await at(0);await at(29);assert.deepEqual(sent,[0]);
+ await at(30);assert.deepEqual(sent,[0,30]);
+ // The service restarts in the middle of the second wait: the count and the wait are still there.
+ h.restart();await at(60);await at(149);assert.deepEqual(sent,[0,30]);
+ await at(150);assert.deepEqual(sent,[0,30,150]);
+ await at(629);assert.deepEqual(sent,[0,30,150]);
+ await at(630);assert.deepEqual(sent,[0,30,150,630]);
+ // After the third return nothing is sent again, across restarts and beyond the 30-day cleanup of the table.
+ h.restart();
+ for(const elapsed of [631,1200,5000,50000,100000])await at(elapsed);
+ assert.deepEqual(sent,[0,30,150,630]);assert.equal(status,'unknown');
+ assert.deepEqual({...h.db.prepare('SELECT id,count FROM node_resends').get()},{id:'d1',count:3});
+ assert.ok(logs.slice(before).some(line=>line.includes('aguardando conferência manual')));h.close();
+});
+test('An old unconfirmed confirmation is not sent again and does not hold the ones behind it',async()=>{
+ const sent=[],status={old:'unknown',fresh:'pending'};
+ const h=harness({transport:async message=>{sent.push(message.id);return {messageId:'<sent@example.test>'};},answer:({action,body})=>{
+  if(action==='confirmations')return {confirmations:[{id:'old',status:status.old,created_at:'2026-11-10T12:00:00.000Z'},{id:'fresh',status:status.fresh,created_at:'2026-11-19T14:59:00.000Z'}].filter(item=>item.status!=='sent')};
+  if(action==='confirmations/error')status[body.id]=body.status;
+  if(action==='confirmations/claim'){status[body.id]='claimed';return {id:body.id,to:'owner@example.test',subject:'QA',body:'Synthetic QA'};}
+  if(action==='confirmations/ack')status[body.id]='sent';
+ }});
+ const start=h.state.time;
+ for(const elapsed of [0,31,200,700]){h.state.time=start+elapsed*minute;await h.scheduler.tick();}
+ assert.deepEqual(sent,['fresh']);assert.deepEqual(status,{old:'unknown',fresh:'sent'});h.close();
 });
 test('A definite SMTP refusal backs off 1, 2, 4 … minutes for that message; an uncertain result is never resent blindly',async()=>{
  const tried=[];let uncertain=false;

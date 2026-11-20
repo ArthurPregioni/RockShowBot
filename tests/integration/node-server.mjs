@@ -39,6 +39,8 @@ try{
  await login(anonymous,'arthur','wrong',401);
  await login(owner,'arthur','qa-only-long-password-123');
  await api(owner,'/api/artists',{name:band});
+ // Headers added by the login wrapper must survive the framework's own response.
+ assert.equal((await api(owner,'/api/dashboard')).headers()['x-frame-options'],'DENY');
  // Old false positives are archived, preserving sent flags and receipt history.
  const legacy=new SQLiteBinding(path.join(temporary,'web.db'));
  legacy.connection.prepare("INSERT INTO show_events(id,artist,title,country,url,source,status,notified) VALUES('legacy-news',?,?,?,'https://news.example/old','Jornal','unverified',1)").run(band,band+' cancela show na Coreia do Sul','BR');
@@ -104,12 +106,11 @@ try{
  const change=await other.request.post(base+'/account/password',{headers:{Origin:base},form:{current:password,password:'new-guest-qa-password-long'}});assert.equal(change.status(),200);
  await api(other,'/api/dashboard',undefined,401);await login(other,'guest'+stamp,password,401);await login(other,'guest'+stamp,'new-guest-qa-password-long');
  await owner.request.post(base+'/signout-with-chatgpt',{headers:{Origin:base}});await api(owner,'/api/dashboard',undefined,401);
- let throttled=false;
- for(let attempt=0;attempt<21;attempt++){
-  const r=await anonymous.request.post(base+'/register',{headers:{Origin:base},form:{...signup,password:'short',confirmation:'short'}});
-  if(r.status()===429){throttled=true;break;}assert.equal(r.status(),400);
- }
- assert.ok(throttled,'Registration must have a bounded request limit');
+ // Rejected forms never use up the sign-up allowance: only created accounts count, three per source in the hour.
+ for(let attempt=0;attempt<25;attempt++)await invalid({...signup,password:'short',confirmation:'short'});
+ const third=await browser.newContext(),fourth=await browser.newContext();
+ assert.equal((await third.request.post(base+'/register',{headers:{Origin:base},form:{...signup,username:'third'+stamp}})).status(),200);
+ assert.equal((await fourth.request.post(base+'/register',{headers:{Origin:base},form:{...signup,username:'fourth'+stamp}})).status(),429,'Registration must have a bounded limit of created accounts');
  await stop();server=launch('false');await ready();
  const closedLogin=await anonymous.request.get(base+'/login');assert.ok(!(await closedLogin.text()).includes('href="/register"'));
  assert.equal((await anonymous.request.get(base+'/register')).status(),403);

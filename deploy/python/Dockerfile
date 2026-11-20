@@ -1,4 +1,4 @@
-FROM python:3.12.11-slim-bookworm
+FROM python:3.12.16-slim-trixie
 
 # The server binds loopback by default; inside a container the published port needs all interfaces.
 ENV PYTHONDONTWRITEBYTECODE=1 \

@@ -46,7 +46,7 @@ SMTP_STARTTLS=true
 
 Para buscas reais nesta versão, configure Ticketmaster ou PredictHQ. Sem eles, a interface aceita artistas e dicas manuais. SMTP vazio mantém os alertas pendentes. Depois de configurar SMTP, salve o e-mail de destino no painel. Os detalhes estão no [guia do servidor Python](standalone.md).
 
-A porta padrão é **8765**. Pode mudá-la em `PORT` se outro serviço já a usar. `DATABASE_PATH` é gerenciado pelo preset; fica fixo no diretório persistente da aplicação. O agendador Python consulta os provedores a cada `SCAN_INTERVAL_HOURS` horas; a primeira busca automática ocorre depois desse intervalo. Também é possível iniciar uma busca pelo painel.
+A porta padrão é **8765**. Pode mudá-la em `PORT` se outro serviço já a usar. `DATABASE_PATH` é gerenciado pelo preset; fica fixo no diretório persistente da aplicação. O agendador Python consulta os provedores a cada `SCAN_INTERVAL_HOURS` horas; a primeira busca automática ocorre cerca de um minuto após iniciar quando a última tiver mais que esse intervalo, e reiniciar o serviço não adia nem repete buscas. Também é possível iniciar uma busca pelo painel.
 
 ## 3. Iniciar e operar
 

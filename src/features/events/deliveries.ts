@@ -2,9 +2,10 @@ import {database,UserError,siteOrigin} from "../../server/database.ts";
 import {settings} from "../../server/bot.ts";
 import {visibleEvents,reconcileEvents} from "./store.ts";
 import {digest} from "../../core/bot.ts";
-import {eventIdentity,eventRevision,notificationIdentity,sharedNotificationIdentity,canonicalReceiptRevision,alertBatch,alertCounts,renderAlert,type StoredEvent} from "../../core/events.ts";
+import {eventIdentity,eventRevision,notificationIdentity,sharedNotificationIdentity,canonicalReceiptRevision,receiptLapsed,alertBatch,alertCounts,renderAlert,type StoredEvent} from "../../core/events.ts";
 
 type Snapshot=StoredEvent&{receiptId:string;revision:string;key:string};
+type Receipt={id:string;revision:string;event_key:string;created_at:string};
 type Delivery={id:string;recipient:string;batch_key:string;status:string;subject:string;body:string;html:string;snapshot:string;message_id:string;last_error:string;created_at:string;sent_at:string|null};
 const deliveryView=(row:Delivery)=>{const counts=alertCounts(JSON.parse(row.snapshot));return {id:row.id,status:row.status,to:row.recipient,subject:row.subject,body:row.body,html:row.html,messageId:row.message_id,lastError:row.last_error,count:counts.count,concerts:counts.concerts,possibilities:counts.possibilities};};
 export async function pendingAlerts(){
@@ -12,15 +13,25 @@ export async function pendingAlerts(){
   const recipient=preferences.email.trim().toLowerCase(),db=database();
   const visible=await visibleEvents(JSON.parse(preferences.countries),10000);
   // Preserve legacy delivery flags without inventing Gmail IDs or historical send times.
-  const legacy=(await db.prepare("SELECT * FROM show_events WHERE notified=1 AND status NOT IN ('duplicate','irrelevant')").all<StoredEvent>()).results;
+  // An undated rumor row past the receipt lifetime is about to be purged; it must not renew its receipt.
+  const legacy=(await db.prepare("SELECT * FROM show_events WHERE notified=1 AND status NOT IN ('duplicate','irrelevant')").all<StoredEvent>()).results.filter(event=>!receiptLapsed({event_key:eventIdentity(event),created_at:event.created_at||""}));
   for(let offset=0;offset<legacy.length;offset+=40){
     const statements=await Promise.all(legacy.slice(offset,offset+40).flatMap(event=>[notificationIdentity(event),sharedNotificationIdentity(event)].map(async identity=>db.prepare("INSERT OR IGNORE INTO alert_receipts(id,event_key,revision,recipient,kind) VALUES(?,?,?,?, 'legacy-notified')").bind(await digest(recipient+"|"+identity),eventIdentity(event),eventRevision(event),recipient))));
     if(statements.length)await db.batch(statements);
   }
-  const history=(await db.prepare("SELECT id,revision FROM alert_receipts WHERE recipient=?").bind(recipient).all<{id:string;revision:string}>()).results;
-  const receipts=new Set(history.map(row=>row.id)),revisions=new Set(history.map(row=>canonicalReceiptRevision(row.revision)));
-  const result:Snapshot[]=[];
-  for(const event of visible.filter(event=>event.status!=="reported")){const revision=eventRevision(event),receiptId=await digest(recipient+"|"+notificationIdentity(event));if(!event.notified&&!receipts.has(receiptId)&&!revisions.has(revision)&&!receipts.has(await digest(recipient+"|"+sharedNotificationIdentity(event))))result.push({...event,key:eventIdentity(event),revision,receiptId});}
+  const history=(await db.prepare("SELECT id,revision,event_key,created_at FROM alert_receipts WHERE recipient=?").bind(recipient).all<Receipt>()).results;
+  const receipts=new Map(history.map(row=>[row.id,row] as const)),revisions=new Map(history.map(row=>[canonicalReceiptRevision(row.revision),row] as const));
+  const result:Snapshot[]=[],lapsed=new Set<string>();
+  for(const event of visible.filter(event=>event.status!=="reported"&&!event.notified)){
+    const revision=eventRevision(event),receiptId=await digest(recipient+"|"+notificationIdentity(event));
+    const blocking=[receipts.get(receiptId),revisions.get(revision),receipts.get(await digest(recipient+"|"+sharedNotificationIdentity(event)))].filter((row):row is Receipt=>!!row);
+    if(blocking.some(row=>!receiptLapsed(row,event.published_at)))continue;
+    // A lapsed rumor receipt is removed so the new alert can be claimed and leave a fresh one.
+    blocking.forEach(row=>lapsed.add(row.id));
+    result.push({...event,key:eventIdentity(event),revision,receiptId});
+  }
+  const removals=[...lapsed].map(id=>db.prepare("DELETE FROM alert_receipts WHERE id=?").bind(id));
+  for(let offset=0;offset<removals.length;offset+=80)await db.batch(removals.slice(offset,offset+80));
   return result.slice(0,100);
 }
 function snapshotMatches(row:Delivery,items:Snapshot[]){

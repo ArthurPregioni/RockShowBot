@@ -1,12 +1,13 @@
-import {normalize} from './text.ts';
+import {normalize,namesArtist} from './text.ts';
 import {concertNewsStatus} from './concert-evidence.ts';
-export {normalize} from './text.ts';
-// Concert dates use the dashboard's reference timezone, independently of publication dates.
-export function todayInBrazil(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(now);
+export {normalize,namesArtist} from './text.ts';
+function dayIn(timeZone:string, now:Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {timeZone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(now);
   const get = (type:string) => parts.find(part => part.type === type)!.value;
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
+// Concert dates use the dashboard's reference timezone, independently of publication dates.
+export function todayInBrazil(now = new Date()) { return dayIn("America/Sao_Paulo", now); }
 export function upcomingDate(value:unknown, today = todayInBrazil()) {
   if (typeof value !== "string") return false;
   const day = value.slice(0,10);
@@ -82,7 +83,8 @@ export function newsItems(xml: string, artist: string, country: string): ShowEve
   const results: ShowEvent[] = [];
   for (const match of xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/g)) {
     const get = (tag: string) => decodeXML(match[1].match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`))?.[1] || "").trim();
-    const title = get("title"), link = get("link");
+    // 400 is the stored title length; the classifier's cost grows with the square of what it is given.
+    const title = get("title").slice(0, 400), link = get("link");
     const source=get('source')||'Google News',status=concertNewsStatus(title,artist,country,source);
     if(!status)continue;
     try { webURL(link); } catch { continue; }
@@ -99,7 +101,15 @@ type TicketmasterEvent = {
   _embedded?: {attractions?: {name?:string}[]; venues?: {city?: {name?:string}}[]};
 };
 type TicketmasterResponse = {page?: {totalPages?:number}; _embedded?: {events?:TicketmasterEvent[]}};
-type PredictHQResponse = {next?:string;results?:{title:string;state?:string;start:string;entities?:{name?:string}[]}[]};
+type PredictHQEvent = {title:string;state?:string;start:string;start_local?:string;timezone?:string|null;entities?:{name?:string}[]};
+type PredictHQResponse = {next?:string;results?:PredictHQEvent[]};
+// PredictHQ reports UTC instants: an evening show in the Americas starts on the next UTC day.
+function predictHQDay(event:PredictHQEvent) {
+  if (/^\d{4}-\d{2}-\d{2}/.test(event.start_local || "")) return event.start_local!.slice(0, 10);
+  const start = event.start || "", instant = /T.*(?:Z|[+-]\d\d:?\d\d)$/.test(start) ? Date.parse(start) : NaN;
+  if (event.timezone && !Number.isNaN(instant)) try { return dayIn(event.timezone, new Date(instant)); } catch { /* Unknown zone: keep the provider's date. */ }
+  return start.slice(0, 10);
+}
 
 export async function discover(artist: string, country: string, keys: { ticketmaster?: string; predicthq?: string }, transport: typeof fetch = fetch) {
   const events: ShowEvent[] = [], warnings: string[] = [];
@@ -124,7 +134,7 @@ export async function discover(artist: string, country: string, keys: { ticketma
       for (const event of payload._embedded?.events || []) {
         if (["cancelled", "canceled", "postponed"].includes(event.dates?.status?.code || "") || event.dates?.start?.dateTBA || event.dates?.start?.dateTBD || !upcomingDate(event.dates?.start?.localDate,today)) continue;
         const attractions = event._embedded?.attractions || [];
-        if (attractions.length ? !attractions.some((item) => normalize(item.name || "") === normalize(artist)) : !(` ${normalize(event.name || "")} `).includes(` ${normalize(artist)} `)) continue;
+        if (attractions.length ? !attractions.some((item) => normalize(item.name || "") === normalize(artist)) : !namesArtist(event.name || "", artist)) continue;
         const venue = event._embedded?.venues?.[0] || {};
         events.push({ artist, title: event.name, country, city: venue.city?.name || "", startsAt: event.dates?.start?.localDate || "", url: event.url, source: "Ticketmaster", status: "listed" });
       }
@@ -138,9 +148,10 @@ export async function discover(artist: string, country: string, keys: { ticketma
       const payload = await response.json() as PredictHQResponse;
       if (payload.next) warnings.push(`PredictHQ retornou uma lista parcial para ${artist} (${country}); a rotina na nuvem deve complementar a agenda.`);
       for (const event of payload.results || []) {
-        if ((event.state && event.state !== "active") || !upcomingDate(event.start,today)) continue;
-        if (!(` ${normalize(event.title || "")} `).includes(` ${normalize(artist)} `) && !(event.entities || []).some((e) => normalize(e.name || "") === normalize(artist))) continue;
-        events.push({ artist, title: event.title, country, city: "", startsAt: (event.start || "").slice(0, 10), url: "https://www.predicthq.com/events", source: "PredictHQ", status: "listed" });
+        const day = predictHQDay(event);
+        if ((event.state && event.state !== "active") || !upcomingDate(day,today)) continue;
+        if (!namesArtist(event.title || "", artist) && !(event.entities || []).some((e) => normalize(e.name || "") === normalize(artist))) continue;
+        events.push({ artist, title: event.title, country, city: "", startsAt: day, url: "https://www.predicthq.com/events", source: "PredictHQ", status: "listed" });
       }
     } catch { warnings.push(`PredictHQ indisponível para ${artist} (${country}).`); }
   })());

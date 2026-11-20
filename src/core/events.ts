@@ -3,7 +3,7 @@ import {emailLayout,emailLink,htmlEscape} from './email.ts';
 
 export type StoredEvent={id:string;artist:string;title:string;country:string;city:string;starts_at:string;url:string;source:string;status:string;notified:number;identity_key?:string;published_at?:string;suppress_reason?:string;created_at?:string};
 export function canonicalCity(city:string,country:string){
-  let value=normalize(city.split(/[,/|]/)[0]);
+  let value=normalize(city.split(/[,/|(]|\s[-–—]\s/)[0]);
   const aliases:Record<string,string>={"santiago de chile":"santiago","cidade de buenos aires":"buenos aires","ciudad autonoma de buenos aires":"buenos aires",caba:"buenos aires","sao paulo sp":"sao paulo","buenos aires argentina":"buenos aires"};
   value=aliases[value]||value;
   if(country==="CL"&&value==="santiago centro")value="santiago";
@@ -25,7 +25,14 @@ export function eventIdentity(event:StoredEvent){
 export function eventRevision(event:StoredEvent){return [eventIdentity(event),event.status].join("|");}
 export function notificationIdentity(event:StoredEvent){return eventRevision(event);}
 // Keep the shared bill receipt as well as the source-independent artist/date receipt.
-export function sharedNotificationIdentity(event:StoredEvent){return event.starts_at?[event.country,event.starts_at,canonicalCity(event.city,event.country),canonicalURL(event.url),event.status].join("|"):eventRevision(event);}
+// A shared bill is one listing: same page and same event title. A provider-wide or agenda URL alone would join unrelated shows of that day.
+export function sharedNotificationIdentity(event:StoredEvent){return event.starts_at?[event.country,event.starts_at,canonicalCity(event.city,event.country),canonicalURL(event.url),normalize(event.title),event.status].join("|"):eventRevision(event);}
+export const RUMOR_DAYS=60;
+/** An undated rumor may alert again 60 days after its receipt, on evidence published since then (or undated). Dated shows never do. */
+export function receiptLapsed(receipt:{event_key:string;created_at:string},publishedAt="",now=Date.now()){
+  const created=Date.parse(/[TZ]/.test(receipt.created_at)?receipt.created_at:receipt.created_at.replace(" ","T")+"Z");
+  return receipt.event_key.split("|")[2]==="possibility"&&created<now-RUMOR_DAYS*86400000&&!(Date.parse(publishedAt)<=created);
+}
 export function suppressReason(event:StoredEvent,all:StoredEvent[],today=todayInBrazil()){
   if(!["unverified","reported"].includes(event.status))return "";
   if(event.status==="unverified"&&event.published_at&&/^\d{4}-\d{2}-\d{2}/.test(event.published_at)&&Date.parse(event.published_at)<Date.parse(today)-90*86400000)return "Antecipação publicada há mais de 90 dias; consultar a agenda oficial.";
@@ -40,7 +47,7 @@ export function groupAlerts(events:StoredEvent[]):AlertGroup[]{
   const groups=new Map<string,AlertGroup>();
   for(const event of events){
     // A shared event page on the SAME date/city joins tracked co-headliners; different dates remain separate shows.
-    const key=event.starts_at?[event.country,event.starts_at,canonicalCity(event.city,event.country),canonicalURL(event.url),event.status].join("|"):eventIdentity(event);
+    const key=event.starts_at?sharedNotificationIdentity(event):eventIdentity(event);
     const old=groups.get(key);
     if(old){if(!old.artists.includes(event.artist))old.artists.push(event.artist);old.eventIds.push(event.id);if(event.status==="listed")old.status="listed";}
     else groups.set(key,{key,artists:[event.artist],date:event.starts_at,country:event.country,city:event.city,title:event.title,url:event.url,source:event.source,status:event.status,eventIds:[event.id]});

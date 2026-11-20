@@ -1,8 +1,8 @@
 import {database,UserError} from "../../server/database.ts";
-import {normalize,digest,webURL,upcomingDate,todayInBrazil,type ShowEvent} from "../../core/bot.ts";
-import {findingStatus} from "../radar/sources.ts";
+import {normalize,digest,todayInBrazil,type ShowEvent} from "../../core/bot.ts";
+import {screenFinding} from "../radar/sources.ts";
 import {concertNewsStatus} from '../../core/concert-evidence.ts';
-import {canonicalCity,canonicalURL,eventIdentity,preferredEvent,suppressReason,type StoredEvent} from "../../core/events.ts";
+import {canonicalCity,eventIdentity,preferredEvent,suppressReason,type StoredEvent} from "../../core/events.ts";
 
 export async function reconcileEvents(){
   const db=database();
@@ -30,6 +30,8 @@ export async function reconcileEvents(){
     const notified=group.some(e=>e.notified&&e.status===winner.status)?1:0;
     if(duplicates.length||winner.identity_key!==key||winner.notified!==notified){
       const statements=duplicates.map(e=>db.prepare("UPDATE show_events SET status='duplicate',identity_key=?,suppress_reason=? WHERE id=?").bind("duplicate:"+e.id,"Duplicata consolidada em "+winner.id,e.id));
+      // An archived row can still hold this key after a normalisation change; the unique index would then reject the winner on every request.
+      statements.push(db.prepare("UPDATE show_events SET identity_key='archived:'||id WHERE identity_key=? AND id<>? AND status NOT IN ('listed','reported','unverified')").bind(key,winner.id));
       statements.push(db.prepare("UPDATE show_events SET identity_key=?,city=?,notified=MAX(notified,?) WHERE id=?").bind(key,winner.city,notified,winner.id));
       changes.push(...statements);
     }
@@ -41,24 +43,19 @@ export async function reconcileEvents(){
 }
 export async function visibleEvents(countries:string[],limit=300){
   await reconcileEvents();
-  return (await database().prepare("SELECT * FROM show_events WHERE status IN ('listed','reported','unverified') AND (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM watch_artists a WHERE a.name=show_events.artist) ORDER BY CASE WHEN status='listed' THEN 0 ELSE 1 END,CASE WHEN starts_at='' THEN 1 ELSE 0 END,starts_at,artist LIMIT ?").bind(todayInBrazil(),JSON.stringify(countries),Math.min(10000,Math.max(1,limit))).all<StoredEvent>()).results;
+  // The identity key starts with the normalised artist name, so an artist added again with another spelling keeps its events.
+  return (await database().prepare("SELECT * FROM show_events WHERE status IN ('listed','reported','unverified') AND (starts_at='' OR starts_at>=?) AND country IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM watch_artists a WHERE substr(show_events.identity_key,1,length(a.normalized)+1)=a.normalized||'|') ORDER BY CASE WHEN status='listed' THEN 0 ELSE 1 END,CASE WHEN starts_at='' THEN 1 ELSE 0 END,starts_at,artist LIMIT ?").bind(todayInBrazil(),JSON.stringify(countries),Math.min(10000,Math.max(1,limit))).all<StoredEvent>()).results;
 }
 export async function storeEvents(input:ShowEvent[],artists:{name:string;normalized:string}[],countries:string[]){
   if(!Array.isArray(input)||input.length>100)throw new UserError("Envie até 100 eventos por vez.");
   await reconcileEvents();let added=0;
   for(const event of input){
     if(!event||typeof event.artist!=="string"||typeof event.title!=="string"||typeof event.url!=="string")continue;
-    const artist=artists.find(a=>a.normalized===normalize(event.artist));if(!artist||!countries.includes(event.country)||!event.title.trim())continue;
-    let link:string;try{link=canonicalURL(webURL(event.url));}catch{continue;}if(link.length>2000)continue;
-    const date=typeof event.startsAt==="string"?event.startsAt.slice(0,10):"";if(date&&!upcomingDate(date))continue;
+    const artist=artists.find(a=>a.normalized===normalize(event.artist));if(!artist||!countries.includes(event.country))continue;
+    const finding=screenFinding(event,artist.name);if("refused" in finding)continue;
+    const {status,date,url:link}=finding;
     const published=typeof event.publishedAt==="string"&&/^\d{4}-\d{2}-\d{2}/.test(event.publishedAt)&&!Number.isNaN(Date.parse(event.publishedAt))?new Date(event.publishedAt).toISOString():"";
-    let status=findingStatus(event.status,date,String(event.source||""),link);
-    if(status==='unverified'){
-      const classification=concertNewsStatus(event.title,artist.name,event.country,String(event.source||''));
-      if(!classification)continue;
-      status=classification;
-    }
-    const incoming:StoredEvent={id:"",artist:artist.name,title:event.title.slice(0,400),country:event.country,city:String(event.city||"").slice(0,160),starts_at:date,url:link,source:String(event.source||new URL(link).hostname).slice(0,200),status,notified:0,published_at:published};
+    const incoming:StoredEvent={id:"",artist:artist.name,title:finding.title,country:event.country,city:String(event.city||"").slice(0,160),starts_at:date,url:link,source:String(event.source||new URL(link).hostname).slice(0,200),status,notified:0,published_at:published};
     const db=database();let key=eventIdentity(incoming);
     let existing=await db.prepare("SELECT * FROM show_events WHERE identity_key=?").bind(key).first<StoredEvent>();
     if(!existing&&date){
@@ -71,8 +68,8 @@ export async function storeEvents(input:ShowEvent[],artists:{name:string;normali
       const upgrade=existing.status!=="listed"&&status==="listed";
       const keep=existing.status==="listed"&&status!=="listed"||existing.status==="reported"&&status==="unverified";
       const archived=["superseded","duplicate"].includes(existing.status)&&status!=="listed";
-      if(!keep&&!archived)await db.prepare("UPDATE show_events SET identity_key=?,title=?,city=?,url=?,source=?,status=?,published_at=CASE WHEN ?<>'' THEN ? ELSE published_at END,suppress_reason='',notified=CASE WHEN ? THEN 0 ELSE notified END WHERE id=?")
-        .bind(key,incoming.title,incoming.city,link,incoming.source,status,published,published,upgrade&&existing.status!=="reported"?1:0,existing.id).run();
+      if(!keep&&!archived)await db.prepare("UPDATE show_events SET artist=?,identity_key=?,title=?,city=?,url=?,source=?,status=?,published_at=CASE WHEN ?<>'' THEN ? ELSE published_at END,suppress_reason='',notified=CASE WHEN ? THEN 0 ELSE notified END WHERE id=?")
+        .bind(artist.name,key,incoming.title,incoming.city,link,incoming.source,status,published,published,upgrade&&existing.status!=="reported"?1:0,existing.id).run();
       else if(published)await db.prepare("UPDATE show_events SET published_at=? WHERE id=? AND published_at=''").bind(published,existing.id).run();
       if(upgrade)added++;
     }else{

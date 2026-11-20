@@ -22,7 +22,6 @@ export function sessionStore(db){
   const columns=new Set(db.prepare('PRAGMA table_info(node_sessions)').all().map(r=>r.name));
   for(const [name,type] of [['id','TEXT'],['created_at','INTEGER'],['last_seen','INTEGER'],['agent','TEXT']])if(!columns.has(name))db.exec(`ALTER TABLE node_sessions ADD COLUMN ${name} ${type}`);
   // Migrate existing sessions without changing tokens or extending expired sessions.
-  const now=Date.now();
   for(const row of db.prepare('SELECT token_hash FROM node_sessions WHERE id IS NULL').all())db.prepare('UPDATE node_sessions SET id=?,created_at=?,last_seen=?,agent=? WHERE token_hash=?').run(randomUUID(),null,0,'Navegador já conectado',row.token_hash);
   return {
     create(username,agent=''){

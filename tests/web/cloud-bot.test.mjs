@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {appleLibrary,appleConfiguration,newsItems,discover,normalize} from "../../src/core/bot.ts";
+import {appleLibrary,appleConfiguration,newsItems,discover,normalize,namesArtist} from "../../src/core/bot.ts";
 
 test("Apple library pagination reads candidates without disclosing tokens to another host",async()=>{
   const requests=[];
@@ -57,6 +57,36 @@ test("Upcoming calendar uses concert dates regardless of announcement age",async
   const tm=requested.find(url=>url.host==='app.ticketmaster.com'),phq=requested.find(url=>url.host==='api.predicthq.com');
   assert.ok(tm.searchParams.get('startDateTime'));assert.equal(tm.searchParams.has('publicVisibilityStartDateTime'),false);
   assert.equal(phq.searchParams.get('state'),'active');assert.ok(phq.searchParams.get('start.gte'));
+});
+
+test("A title bills the artist only as the act itself, never inside a longer name or a tribute",()=>{
+  for(const [artist,title] of [["Queen","Queen Experience In Concert"],["Pink Floyd","Pink Floyd Tribute Night"],["Angra","Angra dos Reis Jazz Festival"],
+    ["Rush","Rush Hour Party"],["Kiss","Kiss FM Festival"],["Rush","Big Time Rush - Worldwide Tour"],["Rush","Big Time Rush"],["Queen","Tributo ao Queen"],
+    ["Queen","Queen - Tributo"],["Queen","Queen's Greatest Hits Night"],["Blink","Blink-182"],["Sepultura","Sepulturado"]])
+    assert.equal(namesArtist(title,artist),false,title);
+  for(const title of ["Sepultura","SEPULTURA!","Sepultura - Tour Name","Sepultura – Tour Name","Sepultura | São Paulo","Sepultura: live","Sepultura ao vivo",
+    "Sepultura (SP)","Sepultura em Curitiba","Sepultura Tour 2027","Angra + Sepultura","Angra e Sepultura","Rock in Rio: Sepultura","The Sepultura"])
+    assert.equal(namesArtist(title,"Sepultura"),true,title);
+  assert.equal(namesArtist("Big Time Rush - Worldwide Tour","Big Time Rush"),true);
+  assert.equal(namesArtist("Ratos de Porão ao vivo","ratos de porao"),true);
+});
+test("Provider titles without attraction data must bill the artist, and PredictHQ instants become the venue's day",async()=>{
+  const names=["Queen Experience In Concert","Queen - Rhapsody Tour","Tributo ao Queen","Queen"];
+  const result=await discover("Queen","BR",{ticketmaster:"key",predicthq:"key"},async(input)=>{
+    const url=new URL(input);
+    if(url.host==="news.google.com")return new Response("<rss/>");
+    if(url.host==="app.ticketmaster.com")return Response.json({_embedded:{events:names.map((name,index)=>({name,url:"https://tickets.example/"+index,dates:{start:{localDate:"2030-05-0"+(index+1)}}}))}});
+    return Response.json({results:[
+      {title:"Queen Experience In Concert",state:"active",start:"2030-06-01T03:00:00Z",timezone:"America/Sao_Paulo"},
+      {title:"Queen",state:"active",start:"2030-06-06T00:30:00Z",timezone:"America/Sao_Paulo"},
+      {title:"Queen",state:"active",start:"2030-06-08T00:30:00Z",start_local:"2030-06-07T21:30:00"},
+      {title:"Queen",state:"active",start:"2030-06-09T00:30:00Z",timezone:"Not/AZone"},
+      {title:"Queen",state:"active",start:"2030-06-12"},
+    ]});
+  });
+  assert.deepEqual(result.events.filter(event=>event.source==="Ticketmaster").map(event=>event.title),["Queen - Rhapsody Tour","Queen"]);
+  // 00:30 UTC is 21:30 of the previous day in São Paulo: the same day Ticketmaster's localDate would carry.
+  assert.deepEqual(result.events.filter(event=>event.source==="PredictHQ").map(event=>event.startsAt),["2030-06-05","2030-06-07","2030-06-09","2030-06-12"]);
 });
 
 test("Calendar validates real dates and preserves today's concerts around UTC midnight",async()=>{

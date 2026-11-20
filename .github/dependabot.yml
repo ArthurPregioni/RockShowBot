@@ -14,3 +14,11 @@ updates:
     directory: /
     schedule:
       interval: monthly
+  - package-ecosystem: pip
+    directory: /scripts
+    schedule:
+      interval: monthly
+  - package-ecosystem: docker
+    directory: /deploy/python
+    schedule:
+      interval: monthly

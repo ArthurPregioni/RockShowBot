@@ -348,6 +348,67 @@ class RockShowBotTests(unittest.TestCase):
             thread.join(timeout=2)
             bot.APP_PASSWORD, bot.APP_USER = old_password, old_user
 
+    def serve(self):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), bot.Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 2)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server.server_port
+
+    def test_password_with_non_ascii_characters_can_log_in(self):
+        password = "senha-com-acentuação-longa"
+
+        def status(secret):
+            request = urllib.request.Request(f"http://127.0.0.1:{port}/", headers={
+                "Authorization": "Basic " + base64.b64encode(("admin:" + secret).encode()).decode()})
+            try:
+                with urllib.request.urlopen(request) as response:
+                    return response.status
+            except urllib.error.HTTPError as error:
+                error.close()
+                return error.code
+
+        with patch.object(bot, "APP_PASSWORD", password), patch.object(bot, "APP_USER", "admin"):
+            port = self.serve()
+            self.assertEqual(status(password), 200)
+            self.assertEqual(status("senha-errada-também"), 401)
+
+    def test_idle_connections_are_closed(self):
+        with patch.object(bot.Handler, "timeout", 0.2):
+            port = self.serve()
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as idle:
+                # An empty read is the server closing; this client's own timeout would raise instead.
+                self.assertEqual(idle.recv(1), b"")
+
+    def test_server_binds_loopback_unless_a_host_is_configured(self):
+        bound = []
+
+        class FakeServer:
+            def __init__(self, address, handler):
+                bound.append(address[0])
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        self.addCleanup(bot.STOP_SCHEDULER.clear)
+        with patch.object(bot, "APP_PASSWORD", "test-password-long-enough"), patch.object(bot, "scheduled_scans"), \
+                patch.object(bot, "ThreadingHTTPServer", FakeServer), patch.dict(os.environ, {"PORT": "0"}):
+            os.environ.pop("HOST", None)
+            bot.run_server()
+            os.environ["HOST"] = "0.0.0.0"
+            bot.run_server()
+        self.assertEqual(bound, ["127.0.0.1", "0.0.0.0"])
+        root = Path(__file__).resolve().parents[2]
+        self.assertIn("\nHOST=127.0.0.1\n", (root / "selfhosted/.env.example").read_text(encoding="utf-8"))
+        # A container has to listen on all interfaces for its published port.
+        self.assertIn("HOST=0.0.0.0", (root / "deploy/python/Dockerfile").read_text(encoding="utf-8"))
+        self.assertIn('HOST: "0.0.0.0"', (root / "deploy/python/compose.yaml").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

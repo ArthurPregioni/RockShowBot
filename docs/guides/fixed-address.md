@@ -50,7 +50,7 @@ PY
 
 ## Configurar o aparelho
 
-Transfira `bridge.json` para `~/.config/rockshowbot/bridge.json` no Termux pelo seu canal privado de administração, aplique `chmod 600` e confirme que a aplicação inclui `deploy/termux/bridge.py` e a versão atual de `tunnel.py`. Reinicie somente o serviço `rockshowbot-tunnel`. O helper mantém `ROCKSHOWBOT_SITE_ORIGIN` e `public-url.txt` com a URL fixa, guarda o endereço variável em `tunnel-url.txt` e repete a atualização se a rede estiver indisponível. A chave da ponte não permite administrar a conta Cloudflare, ler bancos ou autenticar no aplicativo.
+Transfira `bridge.json` para `~/.config/rockshowbot/bridge.json` no Termux pelo seu canal privado de administração, aplique `chmod 600` e confirme que a aplicação inclui `deploy/termux/bridge.py` e a versão atual de `tunnel.py`. Reinicie somente o serviço `rockshowbot-tunnel`. O helper mantém `ROCKSHOWBOT_SITE_ORIGIN` e `public-url.txt` com a URL fixa, guarda o endereço variável em `tunnel-url.txt` e repete a atualização se a rede estiver indisponível. **Guarde `bridge.json` como uma senha.** Quem tiver essa chave pode apontar o endereço fixo para outro túnel e passar a receber todo o tráfego, inclusive senhas digitadas e cookies de sessão. Ela não dá acesso à conta Cloudflare nem aos arquivos dos bancos. Se suspeitar que vazou, gere outra, atualize o Worker e o celular e troque a senha do painel.
 
 No primeiro uso, aguarde o HTTPS da Cloudflare ficar disponível. Depois, abra a URL fixa, entre no painel e teste o acesso após reiniciar o túnel. A mudança de destino no KV pode levar 60 segundos ou mais para aparecer em outra região. Os cookies pertencem ao novo endereço; faça login novamente e atualize o endereço de destino na extensão de importação.
 
@@ -58,8 +58,32 @@ Se estiver migrando de um Site já pausado, sua rota privada `POST /api/automati
 
 Para voltar ao túnel temporário, remova apenas a configuração da ponte do caminho ativo (por exemplo, renomeando `bridge.json` para `bridge.disabled.json`) e reinicie o serviço do túnel. Isso altera o endereço público de novo. Preserve a configuração e a chave para poder retomar a ponte.
 
+## Identificar cada visitante
+
+O túnel entrega todas as requisições ao painel a partir do próprio aparelho (`127.0.0.1`). Para o painel saber o endereço real de cada visitante, o Worker e o painel precisam compartilhar uma segunda chave, diferente da chave da ponte. No computador, gere-a e cadastre-a no Worker sem exibi-la:
+
+```sh
+python3 - <<'PY'
+import os, secrets, subprocess
+from pathlib import Path
+path = Path('.local/bridge/proxy-key.txt')
+if path.exists():
+    raise SystemExit('Chave existente preservada.')
+descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(descriptor, 'w') as output:
+    output.write(secrets.token_urlsafe(32))
+subprocess.run(['npx', 'wrangler', 'secret', 'put', 'ORIGIN_PROXY_KEY', '--config', '.local/bridge/wrangler.jsonc'], input=path.read_text() + '\n', text=True, check=True)
+PY
+```
+
+No Termux, acrescente ao arquivo privado `~/.config/rockshowbot/node.env` a linha `ROCKSHOWBOT_PROXY_KEY=` seguida do conteúdo de `proxy-key.txt` (32 caracteres ou mais, o mesmo valor do segredo `ORIGIN_PROXY_KEY`) e reinicie `rockshowbot-web`. Se o RockShowBot passa pelo gateway do CasaHub, use a chave de origem desse gateway nos dois lugares.
+
+Sem essa chave nos dois lados, o painel enxerga todos os visitantes como um só: os limites de tentativas de login e de cadastro passam a ser divididos por todos, e alguém errando senhas de propósito atrasa novos logins de todo mundo, inclusive os seus. O painel escreve um aviso no log ao iniciar enquanto a chave não estiver configurada. As sessões já abertas não são afetadas.
+
+Opcionalmente, descomente `ratelimits` no seu `wrangler.jsonc`, escolha um `namespace_id` inteiro que nenhum outro limite da sua conta use e publique de novo. O Worker passa a responder 429 a mais de 10 envios de login ou cadastro por minuto vindos do mesmo endereço, antes de chegarem ao celular.
+
 ## Limites e manutenção
 
 O plano gratuito tem [100 mil requisições Workers por dia](https://developers.cloudflare.com/workers/platform/limits/) e [limites próprios de KV](https://developers.cloudflare.com/kv/platform/pricing/). Cada acesso externo usa a ponte; o agendador do celular continua fazendo suas consultas localmente. Este procedimento não ativa plano pago. O serviço depende de energia, internet no aparelho e disponibilidade da Cloudflare.
 
-O Worker exige HTTPS, não armazena sessões nem conteúdo das páginas, não faz cache dos dados privados e não segue redirecionamentos do servidor com cookies anexados. O segredo só vai para a rota de atualização da ponte e permanece fora do Git. Faça backup dos bancos e preserve os arquivos privados `node.env`, `bridge.json` e a configuração Wrangler da sua instalação.
+O Worker exige HTTPS, não armazena sessões nem conteúdo das páginas, não faz cache dos dados privados e não segue redirecionamentos do servidor com cookies anexados. A chave da ponte só vai para a rota de atualização; a chave do proxy acompanha as requisições apenas até o túnel do celular. Nenhuma das duas fica no Git. Faça backup dos bancos e preserve os arquivos privados `node.env`, `bridge.json`, `proxy-key.txt` e a configuração Wrangler da sua instalação.

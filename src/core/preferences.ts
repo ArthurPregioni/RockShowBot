@@ -3,7 +3,8 @@ export const SOUTH_AMERICA = ['BR','AR','BO','CL','CO','EC','GY','PY','PE','SR',
 export type Preferences = {email:string;notifications:boolean;countries:string[]};
 export function parsePreferences(body:Record<string,unknown>):Preferences {
   const email=typeof body.email==='string'?body.email.trim():'';
-  if(email&&(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254))throw new Error('Informe um e-mail válido.');
+  // Exactly one address: list separators, quotes and brackets would make the transport see several recipients.
+  if(email&&(!/^[^\s@,;:"'<>()\\]+@[^\s@,;:"'<>()\\]+\.[^\s@,;:"'<>()\\]+$/.test(email)||email.length>254))throw new Error('Informe um e-mail válido.');
   if(!Array.isArray(body.countries))throw new Error('Escolha os países para acompanhar.');
   const countries=[...new Set(body.countries.map(value=>String(value).toUpperCase()))];
   if(!countries.length||countries.length>30||countries.some(code=>!/^[A-Z]{2}$/.test(code)))throw new Error('Escolha entre 1 e 30 países válidos.');

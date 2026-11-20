@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {concertNewsStatus} from '../../src/core/concert-evidence.ts';
 import {newsItems} from '../../src/core/bot.ts';
 import {renderAlert} from '../../src/core/events.ts';
+import {screenFinding} from '../../src/features/radar/sources.ts';
 test('Rejects real categories of irrelevant articles from the bad digest',()=>{
  for(const [artist,title,country]of [
   ['Aerosmith','Aerosmith faz show com Dave Grohl nos EUA','BR'],
@@ -55,6 +56,35 @@ test('Keeps genuine speculative performances, including Spanish headlines and qu
   ['Placebo','Posible concierto de Placebo en Chile','CL'],
  ])assert.equal(concertNewsStatus(title,artist,country,'Jornal'),'unverified',title);
  assert.equal(concertNewsStatus('Simple Plan anuncia turnê no Brasil com All Time Low e Fresno','Fresno','BR','Jornal'),'reported');
+});
+test('A place inside a longer foreign name is not evidence for the watched country',()=>{
+ for(const [title,country]of [
+  ['Metallica pode fazer show em El Salvador','BR'],
+  ['Metallica pode fazer show em San Salvador','BR'],
+  ['Metallica pode fazer show em Porto Alegre','PT'],
+  ['Metallica anuncia show em Porto Rico','PT'],
+  ['Metallica pode fazer show na Guiana Francesa','GY'],
+ ])assert.equal(concertNewsStatus(title,'Metallica',country,'Jornal'),null,title);
+ assert.equal(concertNewsStatus('Metallica pode fazer show em Salvador','Metallica','BR','Jornal'),'unverified');
+ assert.equal(concertNewsStatus('Metallica pode fazer show em Porto Alegre','Metallica','BR','Jornal'),'unverified');
+ assert.equal(concertNewsStatus('Metallica pode fazer show no Porto','Metallica','PT','Jornal'),'unverified');
+ assert.equal(concertNewsStatus('Metallica pode fazer show na Guiana Francesa','Metallica','GF','Jornal'),'unverified');
+});
+test('A finding is cut to its stored title before classification, and a refusal says why',()=>{
+ const tip={artist:'Foo Fighters',title:'possível turnê no Brasil',country:'BR',city:'',startsAt:'',url:'https://example.com/a?utm_source=x',source:'Dica pessoal',status:'unverified'};
+ assert.match(screenFinding(tip,'Foo Fighters').refused,/título precisa citar o artista/);
+ assert.deepEqual(screenFinding({...tip,title:'Foo Fighters pode fazer show no Brasil'},'Foo Fighters'),{status:'unverified',title:'Foo Fighters pode fazer show no Brasil',url:'https://example.com/a',date:''});
+ assert.equal(screenFinding({...tip,title:'Foo Fighters anuncia show no Brasil'},'Foo Fighters').status,'reported');
+ assert.match(screenFinding({...tip,url:'javascript:alert(1)'},'Foo Fighters').refused,/link/);
+ assert.match(screenFinding({...tip,startsAt:'2020-01-01'},'Foo Fighters','2026-11-19').refused,/data/);
+ assert.equal(screenFinding({...tip,status:'listed',startsAt:'2030-01-01'},'Foo Fighters','2026-11-19').status,'listed');
+ // The classifier rescans the title per occurrence of the name: 200 KB took about 12 s before the cut.
+ const started=performance.now(),long=screenFinding({...tip,title:'x show brasil '+'rush '.repeat(40000)},'Rush');
+ assert.ok(performance.now()-started<1000);assert.ok('refused' in long);
+ assert.equal(screenFinding({...tip,title:'Foo Fighters pode fazer show no Brasil '+'x'.repeat(1000)},'Foo Fighters').title.length,400);
+ const feed=`<rss><item><title>Rush pode fazer show no Brasil ${'rush '.repeat(40000)}</title><link>https://news.example/long</link><source>Jornal</source></item></rss>`;
+ const read=performance.now(),items=newsItems(feed,'Rush','BR');
+ assert.ok(performance.now()-read<1000);assert.equal(items[0].title.length,400);
 });
 test('Digest summarizes all items, limits source links and escapes article text',()=>{
  const events=Array.from({length:12},(_,i)=>({id:String(i),artist:'Band '+i,title:'Band pode tocar no Brasil <script>bad()</script>',country:'BR',city:'',starts_at:'',url:'https://news.example/story-'+i,source:'News <img src=x>',status:'unverified',notified:0}));

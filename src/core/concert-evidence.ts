@@ -3,6 +3,8 @@ const places:Record<string,string[]>={
  BR:['brasil','brazil','sao paulo','rio de janeiro','curitiba','porto alegre','belo horizonte','brasilia','recife','fortaleza','goiania','salvador','maceio','ipatinga','foz do iguacu'],
  AR:['argentina','buenos aires','rosario','la plata'],CL:['chile','santiago','vina del mar'],UY:['uruguai','uruguay','montevideo'],PY:['paraguai','paraguay','asuncion'],PE:['peru','lima'],CO:['colombia','bogota','medellin'],EC:['equador','ecuador','quito','guayaquil'],BO:['bolivia','la paz'],VE:['venezuela','caracas'],GY:['guiana','guyana'],SR:['suriname'],GF:['guiana francesa','french guiana'],MX:['mexico'],US:['estados unidos','united states','eua','usa'],CA:['canada'],PT:['portugal','lisboa','porto'],ES:['espanha','espana','madrid'],GB:['reino unido','united kingdom','londres','london'],FR:['franca','france','paris'],DE:['alemanha','germany','berlim','berlin'],AU:['australia'],JP:['japao','japan'],
 };
+// Longer names that contain one of the places above but are somewhere else.
+const elsewhere:Record<string,string[]>={BR:['el salvador','san salvador'],PT:['porto alegre','porto velho','porto seguro','porto rico'],GY:['guiana francesa','french guiana']};
 const words=(text:string,phrase:string)=>(` ${text} `).includes(` ${phrase} `);
 const concertNoun='(?:shows?|turne|tour|conciertos?|concertos?|concerts?|festival|festivais|festivales|palcos?|apresentac\\w*)';
 const determiners='(?:(?:um|uma|uns|umas|o|a|os|as|nova|novo|novas|novos|mais|outra|outro|sua|seu|sus|una|un|nueva|nuevos|the|an|new) ){0,4}';
@@ -43,7 +45,8 @@ export function concertNewsStatus(title:string,artist:string,country:string,sour
  const headline=concertHeadline(title,source).replace(/[“"‘']([^”"’']+)[”"’']/g,(_match,quoted:string)=>normalize(quoted)===name?quoted:' ');
  for(const clause of headline.split(/[;\n]/)){
   const value=normalize(clause);
-  if(!words(value,name)||!places[country]?.some(place=>words(value,place)))continue;
+  const located=(elsewhere[country]||[]).reduce((text,place)=>(` ${text} `).split(` ${place} `).join(' ').trim(),value);
+  if(!words(value,name)||!places[country]?.some(place=>words(located,place)))continue;
   if(/\b(?:tributo|cover|homenageia|homenagem|fashion show|desfile|resenha|documentario|relembre|relembra|como foi|o que aconteceu|nega|negou|desmente|desmentiu|cancel\w*|adiad\w*|afasta\w*|aposent\w*|sonho|sonham|wish)\b/.test(value)||/\bnao (?:vem|vira|fara|tocara|vai|pretende|acontecera)\b/.test(value))continue;
   const shortDestination=/^(?:no|ao|vem ao|volta ao|na|em) /.test(value.slice(name.length).trim());
   if(/flesch/i.test(source)&&value.startsWith(name+' ')&&shortDestination)return 'unverified';

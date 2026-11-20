@@ -47,6 +47,15 @@ yarn-error.log*
 *.db
 *.db-*
 
+# Device configuration, credentials and database copies brought into a checkout
+node.env
+server.env
+login.txt
+bridge.json
+rockshowbot*.tar.gz
+*backup*.json
+*export*.json
+
 # Checkout-local tool state
 /.wrangler/
 /.sites-runtime/

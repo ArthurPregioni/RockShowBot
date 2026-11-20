@@ -1,5 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {register} from 'node:module';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {deezerArtists,deezerUserID,catalogArtists,spotifyArtists,spotifyAuthorization,spotifyExchange,musicProviders,browserArtists} from '../../src/features/music/providers.ts';
 
 test('Deezer accepts profile IDs, rejects playlists and arbitrary URLs',()=>{
@@ -57,4 +62,21 @@ test('Browser library imports validate the source, names and size before selecti
  assert.throws(()=>browserArtists('spotify',Array(4001).fill({name:'Angra'})),/1 a 4000/);
  assert.throws(()=>browserArtists('apple',[{name:123}]),/inválido/);
  assert.throws(()=>browserArtists('apple',[{name:'x'.repeat(161)}]),/inválido/);
+});
+
+test('Expired import sessions are deleted by any import request, not kept until the next import starts',async()=>{
+ // Arranged like the Node build: cloudflare:workers is the local SQLite runtime and relative imports get their extension.
+ const runtime=new URL('../../deploy/node/runtime.mjs',import.meta.url).href;
+ register('data:text/javascript,'+encodeURIComponent(`export async function resolve(specifier,context,next){if(specifier==='cloudflare:workers')return {url:${JSON.stringify(runtime)},shortCircuit:true};try{return await next(specifier,context);}catch(error){if(error.code==='ERR_MODULE_NOT_FOUND'&&specifier.startsWith('.'))return next(specifier+'.ts',context);throw error;}}`));
+ const directory=mkdtempSync(join(tmpdir(),'rockshowbot-imports-'));process.env.DATABASE_PATH=join(directory,'web.db');
+ const {localDatabase}=await import(runtime),{musicAction,purgeExpiredImports}=await import('../../src/features/music/imports.ts');
+ const binding=localDatabase();binding.migrate(fileURLToPath(new URL('../../drizzle',import.meta.url)));
+ try{
+  const session=binding.connection.prepare('INSERT INTO music_imports(id,owner,phase,expires,candidates) VALUES(?,?,?,?,?)'),ids=()=>binding.connection.prepare('SELECT id FROM music_imports ORDER BY id').all().map(row=>row.id);
+  session.run('expired','owner','music:deezer:ready',Date.now()-1000,JSON.stringify([{id:'1',name:'Angra'}]));session.run('live','owner','music:deezer:ready',Date.now()+60000,'[]');
+  await purgeExpiredImports();assert.deepEqual(ids(),['live']);
+  session.run('expired','owner','music:spotify:pending',Date.now()-1000,'{}');
+  const response=await musicAction(new Request('https://shows.test/api/music/cancel',{method:'POST'}),'music/cancel',{},'owner','https://shows.test');
+  assert.equal(response.status,200);assert.deepEqual(ids(),['live']);
+ }finally{binding.connection.close();rmSync(directory,{recursive:true,force:true});}
 });

@@ -42,7 +42,7 @@ Você precisa de Python 3.10 ou mais recente. O app e os testes usam apenas a bi
 
 7. Para testar o envio, preencha seu e-mail, configure SMTP no `.env` e clique em **Enviar e-mail de teste**.
 
-As buscas automáticas ocorrem a cada 12 horas por padrão, enquanto o processo estiver ligado. Mude `SCAN_INTERVAL_HOURS` para outro número de horas. O botão **Buscar shows agora** inicia uma busca manual.
+As buscas automáticas ocorrem a cada 12 horas por padrão, enquanto o processo estiver ligado. O horário da última busca fica salvo no banco: ao iniciar, a primeira busca ocorre em cerca de um minuto se a última tiver mais que um intervalo ou nunca tiver ocorrido, e reiniciar o serviço não adia nem repete buscas. Mude `SCAN_INTERVAL_HOURS` para outro número de horas. O botão **Buscar shows agora** inicia uma busca manual.
 
 ### Configurar fontes de eventos
 
@@ -58,7 +58,7 @@ As buscas automáticas ocorrem a cada 12 horas por padrão, enquanto o processo 
 2. Coloque o token em `PREDICTHQ_API_KEY`.
 3. Reinicie o app. A cobertura depende do plano/país habilitado na conta, e a busca pode não retornar dados para todos os locais.
 
-O Ticketmaster cobre eventos listados nas plataformas que alimentam a Discovery API; isso não significa cobertura de todos os shows ou casas. A busca confere o nome da banda entre as atrações para reduzir homônimos. O PredictHQ é opcional e seu acesso pode ser pago ou limitado por assinatura. Os resultados dessas fontes significam “listado pelo provedor”, não confirmação diretamente com o artista. Eventos listados são removidos 30 dias depois da data do show (`EVENT_RETENTION_DAYS`); dicas pessoais permanecem até o administrador apagá-las. A [política da API Ticketmaster](https://developer.ticketmaster.com/support/terms-of-use/) estabelece limites para retenção e solicitações de remoção de dados.
+O Ticketmaster cobre eventos listados nas plataformas que alimentam a Discovery API; isso não significa cobertura de todos os shows ou casas. A busca confere o nome da banda entre as atrações para reduzir homônimos. Quando o provedor não informa as atrações, o título precisa anunciar o próprio artista (`Artista`, `Artista - Turnê`, `Artista ao vivo`); tributos e nomes que apenas contêm o do artista são ignorados. Eventos cancelados ou adiados não entram, e a data guardada é a do local do show. O PredictHQ é opcional e seu acesso pode ser pago ou limitado por assinatura. Os resultados dessas fontes significam “listado pelo provedor”, não confirmação diretamente com o artista. Eventos listados são removidos 30 dias depois da data do show (`EVENT_RETENTION_DAYS`); dicas pessoais permanecem até o administrador apagá-las. A [política da API Ticketmaster](https://developer.ticketmaster.com/support/terms-of-use/) estabelece limites para retenção e solicitações de remoção de dados.
 
 O Songkick informa que não está aprovando projetos de hobby/educação e que seu uso de API requer licença paga; por isso não é tratado como dependência pronta do projeto ([acesso à API](https://www.songkick.com/developer/)). A API do Bandsintown é destinada a artistas e equipes autorizadas, e a chave é vinculada ao artista ([regras de acesso](https://help.artists.bandsintown.com/en/articles/7053475-what-is-the-bandsintown-api)). Não compartilhe chaves pessoais entre instalações.
 
@@ -75,7 +75,7 @@ SMTP_FROM="RockShowBot <voce@example.com>"
 SMTP_STARTTLS=true
 ```
 
-Use a senha de aplicativo quando seu provedor exigir; não coloque credenciais reais no Git. Salve um endereço de destino na interface e use **Enviar e-mail de teste**. Alertas não enviados ficam pendentes no banco e são tentados de novo na próxima busca.
+A porta 587 usa STARTTLS e a porta 465 usa TLS implícito. Nos dois casos o certificado do servidor é verificado: um certificado inválido ou autoassinado impede o envio. Use a senha de aplicativo quando seu provedor exigir; não coloque credenciais reais no Git. Salve um endereço de destino na interface e use **Enviar e-mail de teste**. Alertas não enviados ficam pendentes no banco e são tentados de novo na próxima busca.
 
 ## Configuração de desenvolvimento Apple Music (pendente)
 
@@ -149,7 +149,7 @@ Artistas repetidos são ignorados. O exemplo `docs/examples/artistas-exemplo.csv
 
 ## Android com Termux
 
-O [guia Termux](termux.md) instala este servidor nativamente no Android, com supervisão, boot, dados persistentes e backup. O preset usa `HOST=127.0.0.1` e `PORT=8765`. Em Docker/Render, o padrão continua `HOST=0.0.0.0` para receber o encaminhamento da hospedagem.
+O [guia Termux](termux.md) instala este servidor nativamente no Android, com supervisão, boot, dados persistentes e backup. O servidor escuta em `127.0.0.1` por padrão; o preset usa `PORT=8765`. A imagem Docker define `HOST=0.0.0.0` para receber o encaminhamento da hospedagem.
 
 ## Hospedar no Render
 
@@ -162,7 +162,7 @@ O repositório inclui `deploy/python/Dockerfile` e `render.yaml` para criar um s
 5. Informe uma senha forte para `APP_PASSWORD` quando o Render pedir, faça o deploy e abra a URL `onrender.com`. O usuário é `admin`.
 6. Cadastre artistas e salve seu e-mail na página.
 
-O Render entrega URL pública com HTTPS e espera que o app escute em `0.0.0.0`; esse app usa o `PORT` fornecido pelo serviço. O disco montado em `/var/data` preserva o banco entre reinícios e deploys. O plano grátis pode desligar o processo depois de inatividade, e seu sistema de arquivos padrão é temporário; isso interromperia as buscas agendadas e não preservaria o SQLite. Confira a documentação atual de [Web Services](https://render.com/docs/web-services), [Persistent Disks](https://render.com/docs/disks) e [Blueprints](https://render.com/docs/blueprint-spec).
+O Render entrega URL pública com HTTPS e espera que o app escute em `0.0.0.0`, o que a imagem já define; esse app usa o `PORT` fornecido pelo serviço. O disco montado em `/var/data` preserva o banco entre reinícios e deploys. O plano grátis pode desligar o processo depois de inatividade, e seu sistema de arquivos padrão é temporário; isso interromperia as buscas agendadas e não preservaria o SQLite. Confira a documentação atual de [Web Services](https://render.com/docs/web-services), [Persistent Disks](https://render.com/docs/disks) e [Blueprints](https://render.com/docs/blueprint-spec).
 
 Não coloque o servidor diretamente na internet sem `APP_PASSWORD`. Use HTTPS para login Basic; o Render termina HTTPS antes de encaminhar o tráfego ao serviço.
 
@@ -171,14 +171,15 @@ Não coloque o servidor diretamente na internet sem `APP_PASSWORD`. Use HTTPS pa
 ```sh
 docker build -f deploy/python/Dockerfile -t rockshowbot .
 docker run --name rockshowbot --restart unless-stopped \
-  -p 8000:10000 \
+  -p 127.0.0.1:8000:10000 \
   --env-file .env \
+  -e HOST=0.0.0.0 \
   -e DATABASE_PATH=/var/data/rockshowbot.db \
   -v rockshowbot-data:/var/data \
   rockshowbot
 ```
 
-Passe as chaves de API e SMTP também com `-e` ou por um arquivo de segredos protegido. Configure domínio e HTTPS no proxy reverso do host.
+O `.env` do exemplo traz `HOST=127.0.0.1`; dentro do contêiner o servidor precisa de `-e HOST=0.0.0.0`, e a porta fica publicada só no loopback do host. O servidor roda como o usuário sem privilégios `rockshowbot` (UID 10001); o contêiner inicia como root apenas para entregar `/var/data` a esse usuário. Passe as chaves de API e SMTP também com `-e` ou por um arquivo de segredos protegido. Configure domínio e HTTPS no proxy reverso do host.
 
 ### Docker Compose em um servidor próprio
 

@@ -1,10 +1,23 @@
-import {normalize,upcomingDate,COUNTRY_NAMES,type ShowEvent} from "../../core/bot.ts";
+import {normalize,namesArtist,upcomingDate,COUNTRY_NAMES,type ShowEvent} from "../../core/bot.ts";
 import {officialURL,sourcesForCountries,type RadarSource} from "./sources.ts";
 
 const array = <T,>(value:T|T[]|null|undefined):T[] => value==null?[]:Array.isArray(value)?value:[value];
 const record = (value:unknown):Record<string,unknown> => value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
+// Pages come from third parties, up to 2 MB. These helpers stay linear on unclosed tags, where the
+// single-regex forms (<tag ...>lazy body</tag>, <[^>]*>) restarted a full scan at every opening.
+function* elements(html:string,name:string,wanted:RegExp) {
+  const open=new RegExp(`<${name}\\b`,"gi"),close=new RegExp(`</${name}>`,"gi");
+  for(let start=open.exec(html);start;start=open.exec(html)) {
+    const end=html.indexOf(">",start.index);if(end<0)return;
+    const tag=html.slice(start.index,end+1);open.lastIndex=end+1;
+    if(!wanted.test(tag))continue;
+    close.lastIndex=end+1;const closing=close.exec(html);if(!closing)return;
+    open.lastIndex=close.lastIndex;
+    yield {tag,body:html.slice(end+1,closing.index)};
+  }
+}
 function text(value:string) {
-  return value.replace(/<[^>]*>/g," ").replace(/&(?:amp|quot|apos|lt|gt|#(\d+)|#x([\da-f]+));/gi,(match,decimal,hex)=>{
+  return value.replace(/<[^<>]*>/g," ").replace(/&(?:amp|quot|apos|lt|gt|#(\d+)|#x([\da-f]+));/gi,(match,decimal,hex)=>{
     if(decimal||hex){const code=parseInt(decimal||hex,decimal?10:16);return code<=0x10ffff?String.fromCodePoint(code):"";}
     return ({"&amp;":"&","&quot;":'"',"&apos;":"'","&lt;":"<","&gt;":">"} as Record<string,string>)[match.toLowerCase()]||"";
   }).replace(/\s+/g," ").trim();
@@ -26,8 +39,8 @@ export function officialPage(html:string,pageURL:string,source:RadarSource,artis
     if(array(value["@type"]).some(type=>/^(?:https?:\/\/schema.org\/)?(?:MusicEvent|Event|Festival)$/.test(String(type))))objects.push(value);
     for(const nested of Object.values(value))if(typeof nested==="object")walk(nested,depth+1);
   }
-  for(const script of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
-    try{walk(JSON.parse(script[1]));}catch{/* A malformed block must not discard valid independent blocks. */}
+  for(const script of elements(html,"script",/type\s*=\s*["']application\/ld\+json["']/i)){
+    try{walk(JSON.parse(script.body));}catch{/* A malformed block must not discard valid independent blocks. */}
   }
   for(const event of objects) {
     if(typeof event.name!=="string"||typeof event.startDate!=="string"||!upcomingDate(event.startDate,today))continue;
@@ -35,6 +48,7 @@ export function officialPage(html:string,pageURL:string,source:RadarSource,artis
     if(String(event.eventAttendanceMode||"").includes("OnlineEventAttendanceMode"))continue;
     // Festival ranges do not establish the artist's performance date.
     if(event.endDate&&String(event.endDate).slice(0,10)!==event.startDate.slice(0,10))continue;
+    const title=text(event.name);
     const places=array(event.location).map(record).filter(place=>place.address);
     for(const place of places) {
       const country=countryCode(record(place.address).addressCountry);
@@ -43,16 +57,18 @@ export function officialPage(html:string,pageURL:string,source:RadarSource,artis
       if(!url)continue;
       const performers=array(event.performer||event.performers).map(item=>typeof item==="string"?item:String(record(item).name||""));
       for(const artist of artists) {
-        if(performers.length?!performers.some(name=>normalize(name)===normalize(artist)):!(normalize(event.name)===normalize(artist)||normalize(event.name).startsWith(normalize(artist)+" ")))continue;
-        events.push({artist,title:text(event.name),country,city:String(record(place.address).addressLocality||""),startsAt:event.startDate.slice(0,10),url,source:source.name,status:"listed"});
+        // Without a performer list the event name has to bill the artist; a name that merely starts with it is another event.
+        if(performers.length?!performers.some(name=>normalize(name)===normalize(artist)):!namesArtist(title,artist))continue;
+        events.push({artist,title,country,city:String(record(place.address).addressLocality||""),startsAt:event.startDate.slice(0,10),url,source:source.name,status:"listed"});
       }
     }
   }
-  for(const link of html.matchAll(/<a\b([^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*)>([\s\S]*?)<\/a>/gi)) {
-    const url=officialURL(text(link[2]),pageURL);
+  const href=/^[\s\S]*\bhref\s*=\s*["']([^"']+)["']/i;
+  for(const link of elements(html,"a",href)) {
+    const url=officialURL(text(link.tag.match(href)![1]),pageURL);
     if(!url||url===pageURL||/\.(?:jpg|jpeg|png|webp|svg|pdf|zip)(?:\?|$)/i.test(url))continue;
-    const attrs=[...link[0].matchAll(/\b(?:alt|title|aria-label)\s*=\s*["']([^"']+)["']/gi)].map(item=>item[1]).join(" ");
-    const title=text(link[3]+" "+attrs);
+    const attrs=[...(link.tag+link.body).matchAll(/\b(?:alt|title|aria-label)\s*=\s*["']([^"']+)["']/gi)].map(item=>item[1]).join(" ");
+    const title=text(link.body+" "+attrs).slice(0,2000);
     for(const artist of artists)if(matches(title,artist)&&!candidates.some(item=>item.artist===artist&&item.url===url))candidates.push({artist,url,title:title.slice(0,400)});
     if(candidates.length>=100)break;
   }

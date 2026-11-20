@@ -8,6 +8,12 @@
 **/__pycache__
 **/*.pyc
 **/.env*
+**/node.env
+**/server.env
+**/login.txt
+**/.apple-music-token*
 **/*.p8
 **/*.pem
 **/*.db
+**/*.db-*
+**/*.sqlite*

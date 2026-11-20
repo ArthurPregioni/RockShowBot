@@ -39,6 +39,29 @@ test('Malformed JSON does not discard independent events; title fallback matches
  assert.equal(officialPage(html({...event,performer:undefined,name:'Big Time Rush'}),url,source,['Rush'],['BR'],'2026-10-29').events.length,0);
  assert.equal(parse({...event,performer:undefined}).length,1);
 });
+test('Without a performer list the event name must bill the artist, not merely start with or contain the name',()=>{
+ const named=(name,artist)=>officialPage(html({...event,performer:undefined,name}),url,source,[artist],['BR'],'2026-10-29').events.length;
+ for(const [artist,name]of [
+  ['Queen','Queen Experience In Concert'],['Pink Floyd','Pink Floyd Tribute Night'],['Angra','Angra dos Reis Jazz Festival'],
+  ['Rush','Rush Hour Party'],['Kiss','Kiss FM Festival'],['Rush','Big Time Rush - Worldwide Tour'],['Queen','Tributo ao Queen'],
+ ])assert.equal(named(name,artist),0,name);
+ for(const name of ['Sepultura','Sepultura - Tour Name','Sepultura | São Paulo','Sepultura: live','Sepultura ao vivo','Angra + Sepultura','Guns N&#39; Roses e Sepultura'])
+  assert.equal(named(name,'Sepultura'),1,name);
+ assert.equal(named('Guns N&#39; Roses e Sepultura',"Guns N' Roses"),1);
+ // A performer list still decides, whatever the event is called.
+ assert.equal(officialPage(html({...event,name:'Queen Experience In Concert',performer:[{name:'Queen'}]}),url,source,['Queen'],['BR'],'2026-10-29').events.length,1);
+ assert.equal(officialPage(html({...event,name:'Queen',performer:[{name:'Queen Experience'}]}),url,source,['Queen'],['BR'],'2026-10-29').events.length,0);
+});
+test('Hostile markup is read in linear time and ordinary markup yields the same events and links',()=>{
+ const read=body=>{const started=performance.now(),page=officialPage(body,url,source,['Sepultura'],['BR'],'2026-10-29');return {page,elapsed:performance.now()-started};};
+ // Each of these took from 1 s to more than 10 s at this size with the single-regex scanners.
+ for(const body of ['<script '.repeat(50000),'<script type="application/ld+json">'.repeat(12000),'<a href="/x">Sepultura '.repeat(18000),'<a href="/x">'+'<'.repeat(400000)+'</a>'])
+  assert.ok(read(body).elapsed<2000,body.slice(0,40));
+ const {page}=read(`<SCRIPT TYPE='application/ld+json'>${JSON.stringify(event)}</SCRIPT><script>var x="<a href='/in-script'>Sepultura</a>";</script>`
+  +`<a class="card" data-n="1" href="/show/one" title="Sepultura"><img alt="cartaz"></a><A HREF='/show/two'>Sepultura <b>ao vivo</b></A><a name="top">Sepultura</a><a href="/unclosed">Sepultura`);
+ assert.equal(page.events.length,1);
+ assert.deepEqual(page.candidates.map(item=>[new URL(item.url).pathname,item.title]),[['/in-script','Sepultura'],['/show/one','Sepultura cartaz'],['/show/two','Sepultura ao vivo']]);
+});
 test('Flesch public channel fallback handles current YouTube cards without confusing Rush and Big Time Rush',async()=>{
  const data={contents:[{lockupViewModel:{contentType:'LOCKUP_CONTENT_TYPE_VIDEO',contentId:'abcdefghijk',metadata:{lockupMetadataViewModel:{title:{content:'BIG TIME RUSH NO BRASIL!'}}}}},{videoRenderer:{videoId:'lmnopqrstuv',title:{runs:[{text:'IRON MAIDEN NO BRASIL!'}]}}}]};
  const page=`<script>var ytInitialData = ${JSON.stringify(data)};</script>`;

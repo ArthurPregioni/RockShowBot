@@ -15,6 +15,11 @@ test('Preferences validate destinations and countries before persisting a confir
  assert.throws(()=>parsePreferences({countries:['BRA']}),/países/);
  assert.equal(parsePreferences({email:'fan@example.com',notifications:false,countries:['BR']}).notifications,false);
 });
+test('The alert address is a single mailbox: list separators, quotes and brackets are refused',()=>{
+ for(const email of ['a,b@c.d','x@y.z;w','a@b.c:25','"><b>@c.d',"o'neil@c.d",'Nome <a@b.c>','a(b)@c.d','a\\b@c.d','a b@c.d','a@b@c.d','a@b','a@'+'b'.repeat(250)+'.com'])
+  assert.throws(()=>parsePreferences({email,countries:['BR']}),/e-mail/,email);
+ assert.equal(parsePreferences({email:'fan+shows@mail.example.com',countries:['BR']}).email,'fan+shows@mail.example.com');
+});
 test('Confirmation summarizes the saved snapshot and uses its exact address and unique delivery marker',()=>{
  const message=confirmationMessage('unique-marker',{email:'fan@example.com',notifications:false,countries:['BR','GY','SR']},'https://shows.example');
  assert.equal(message.to,'fan@example.com');assert.ok(message.subject.includes('unique-marker'));

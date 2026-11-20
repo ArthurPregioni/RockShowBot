@@ -17,9 +17,19 @@ SECRET_PATTERNS = {
     "aws-access-key": rb"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     "slack-token": rb"\bxox[baprs]-[0-9A-Za-z-]{20,}\b",
     "jwt": rb"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\b",
+    "password-hash": rb"\bscrypt:[0-9a-f]{16,}:[0-9a-f]{64,}\b",
+    "database-export": rb"\"format\"\s*:\s*\"rockshowbot-web-sqlite-v1\"",
 }
 PATTERNS = {name: re.compile(pattern) for name, pattern in SECRET_PATTERNS.items()}
 RUNTIME_DIRECTORIES = {"node_modules", ".wrangler", ".sites-runtime", ".cache", "__pycache__", ".extension-build", ".next", ".vinext", ".venv"}
+# Configuration, credentials and tunnel settings an installation keeps outside the checkout.
+PRIVATE_NAMES = {".env", ".dev.vars", "node.env", "server.env", "login.txt", "bridge.json"}
+# Blobs pushed before a rule existed. Listing one here does not make it private again: it is still
+# reported on every run, without failing it, until history is rewritten and the entry removed.
+PUBLISHED_HISTORY = {
+    "55b701b1325d164430ed458a4957cb1a5e4d0654",  # .openai/hosting.json
+    "ad6847e10a20cc2ba29ae42abe2e89c41a3b76f0",  # hosted/.openai/hosting.json
+}
 
 
 def git(*args: str) -> bytes:
@@ -31,10 +41,10 @@ def private_path(name: str) -> bool:
     if path.name.endswith((".example", ".sample")):
         return False
     return (
-        path.name in {".env", ".dev.vars"}
+        path.name in PRIVATE_NAMES
         or path.name.startswith((".env.", ".dev.vars.", ".apple-music-token"))
         or path.suffix in {".p8", ".pem", ".key", ".db", ".sqlite", ".sqlite3"}
-        or name == ".openai/hosting.json"
+        or path.parts[-2:] == (".openai", "hosting.json")
         or bool(RUNTIME_DIRECTORIES.intersection(path.parts))
     )
 
@@ -65,14 +75,14 @@ def local_links(name: str, content: str) -> list[str]:
     return findings
 
 
-def scan_history() -> tuple[int, list[str]]:
+def scan_history() -> tuple[int, list[str], list[str]]:
     # Deduplicate blobs before reading; old tree names are sufficient to locate findings.
     objects = {}
     for row in git("rev-list", "--objects", "--all").decode().splitlines():
         oid, _, name = row.partition(" ")
         if name:
             objects[oid] = name
-    findings = []
+    findings, published = [], []
     process = subprocess.Popen(["git", "cat-file", "--batch"], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     blobs = 0
     try:
@@ -87,12 +97,15 @@ def scan_history() -> tuple[int, list[str]]:
             process.stdout.read(1)
             if header[1] == "blob":
                 blobs += 1
+                # Deleting a private file from the last commit leaves it readable in every clone.
+                if private_path(name):
+                    (published if oid in PUBLISHED_HISTORY else findings).append(f"history {oid[:12]}:{name}: private/runtime file")
                 findings.extend(scan_content(f"history {oid[:12]}:{name}", content))
     finally:
         process.stdin.close()
         process.stdout.close()
         process.wait()
-    return blobs, findings
+    return blobs, findings, published
 
 
 def main() -> int:
@@ -121,13 +134,16 @@ def main() -> int:
                 continue
             if name == ".openai/hosting.example.json" and data.get("project_id"):
                 findings.append(f"{name}: example must not contain a registered Site identity")
-    blobs = 0
+    blobs, published = 0, []
     if args.history:
-        blobs, history_findings = scan_history()
+        blobs, history_findings, published = scan_history()
         findings.extend(history_findings)
     for finding in findings:
         print(finding)
-    print(f"Reviewed {checked} distributable files" + (f" and {blobs} history blobs" if args.history else "") + f"; {len(findings)} finding(s).")
+    for finding in published:
+        print(finding + " (already published; listed in PUBLISHED_HISTORY)")
+    print(f"Reviewed {checked} distributable files" + (f" and {blobs} history blobs" if args.history else "") + f"; {len(findings)} finding(s)"
+          + (f", {len(published)} already published" if published else "") + ".")
     return int(bool(findings))
 
 

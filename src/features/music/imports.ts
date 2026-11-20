@@ -19,8 +19,11 @@ async function create(request:Request,owner:string,phase:string,payload:unknown)
   await database().prepare("DELETE FROM music_imports WHERE expires<? OR (id=? AND owner=?)").bind(Date.now(),await digest(rawCookie(request)),owner).run();
   await database().prepare("INSERT INTO music_imports(id,owner,phase,expires,candidates) VALUES(?,?,?,?,?)").bind(id,owner,phase,Date.now()+600000,JSON.stringify(payload)).run();return raw;
 }
+/** Expired sessions still hold the candidate artists (and the PKCE verifier before the Spotify return): do not keep them until the next import. */
+export async function purgeExpiredImports(){await database().prepare("DELETE FROM music_imports WHERE expires<?").bind(Date.now()).run();}
 export async function musicAction(request:Request,action:string,body:Record<string,unknown>,owner:string,origin:string):Promise<Response>{
   try {
+    await purgeExpiredImports();
     const redirectURI=origin+"/api/music/spotify/callback";
     if(request.method==="GET"&&action==="music/spotify/callback"){
       const s=await session(request,owner);
