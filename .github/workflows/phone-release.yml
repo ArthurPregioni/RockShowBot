@@ -44,6 +44,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
+          latest=$(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/master | cut -f1)
+          if [ "$latest" != "$RELEASE_SHA" ]; then
+            echo 'A branch master avançou; esta revisão não substituirá o release mais novo.'
+            exit 0
+          fi
           if gh release view phone-latest >/dev/null 2>&1; then
             gh release upload phone-latest rockshowbot-web.tar.gz --clobber
           else
