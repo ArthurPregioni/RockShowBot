@@ -1,0 +1,52 @@
+name: Publicar artefato do telefone
+on:
+  workflow_run:
+    workflows: [QA]
+    types: [completed]
+    branches: [master]
+permissions:
+  contents: write
+concurrency:
+  group: rockshowbot-phone-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run build:node
+      - name: Empacotar sem dados privados
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          tar -czf rockshowbot-web.tar.gz -C dist/standalone .
+          node --input-type=module -e '
+            import {createHash} from "node:crypto";
+            import {readFileSync,writeFileSync} from "node:fs";
+            const body=readFileSync("rockshowbot-web.tar.gz");
+            writeFileSync("rockshowbot-web.json",JSON.stringify({commit:process.env.RELEASE_SHA,sha256:createHash("sha256").update(body).digest("hex"),bytes:body.length},null,2)+"\n");
+          '
+      - name: Atualizar release de implantação
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if gh release view phone-latest >/dev/null 2>&1; then
+            gh release upload phone-latest rockshowbot-web.tar.gz --clobber
+          else
+            gh release create phone-latest rockshowbot-web.tar.gz --title 'RockShowBot para Android' --notes 'Build Node para Termux, publicado após o QA da branch master.' --prerelease --latest=false
+          fi
+          gh release upload phone-latest rockshowbot-web.json --clobber

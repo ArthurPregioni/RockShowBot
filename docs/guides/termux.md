@@ -92,6 +92,8 @@ A supervisão reinicia um processo que falhou. O script de boot respeita os serv
 
 ## Dados, backup e atualização
 
+O workflow `phone-release.yml` publica o build Node sem segredos como release `phone-latest` depois que o QA da branch `master` passa. Um atualizador instalado no celular pode verificar o manifesto e o SHA-256 do arquivo, trocar o código e confirmar `/healthz` antes de manter a nova revisão. O banco, as contas e o SMTP ficam fora do artefato. Outras instalações podem continuar atualizando manualmente.
+
 | Caminho | Conteúdo |
 | --- | --- |
 | `~/apps/rockshowbot-web/` | Artefato compilado |
